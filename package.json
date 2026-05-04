@@ -1,0 +1,42 @@
+{
+  "name": "michu-huatu-build",
+  "private": true,
+  "devDependencies": {
+    "electron": "^41.5.0",
+    "electron-builder": "^25.1.8"
+  },
+  "scripts": {
+    "start": "electron ./app",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.michu.huatu",
+    "productName": "米醋画图",
+    "directories": {
+      "output": "release",
+      "app": "app"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/**/*",
+      "!*.map"
+    ],
+    "win": {
+      "target": {
+        "target": "nsis",
+        "arch": "x64"
+      }
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "asar": true,
+    "asarUnpack": [],
+    "compression": "maximum",
+    "removePackageScripts": true,
+    "afterPack": "./build/remove-locales.js"
+  }
+}
