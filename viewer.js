@@ -14,10 +14,15 @@ function escapeHtml(t) {
 }
 
 async function copyTextToClipboard(text) {
-  try { await navigator.clipboard.writeText(text); return true; } catch {
-    const ta = document.createElement('textarea'); ta.value = text;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text;
     ta.style.cssText = 'position:fixed;opacity:0';
-    document.body.appendChild(ta); ta.select();
+    document.body.appendChild(ta);
+    ta.select();
     const ok = document.execCommand('copy');
     document.body.removeChild(ta);
     if (!ok) throw new Error('复制失败');
@@ -85,8 +90,11 @@ function normalizeToDataUrl(raw) {
   if (!/^[A-Za-z0-9+/=]+$/.test(s)) throw new Error('包含非法的 Base64 字符');
   const sample = s.slice(0, 64);
   let bin;
-  try { bin = atob(sample.padEnd(Math.ceil(sample.length / 4) * 4, '=')); }
-  catch (e) { throw new Error('Base64 解码失败：' + e.message); }
+  try {
+    bin = atob(sample.padEnd(Math.ceil(sample.length / 4) * 4, '='));
+  } catch (e) {
+    throw new Error('Base64 解码失败：' + e.message);
+  }
   const b = [...bin].map(c => c.charCodeAt(0));
   let mime = 'image/png';
   if (b[0]===0x89 && b[1]===0x50 && b[2]===0x4e && b[3]===0x47) mime = 'image/png';
@@ -98,41 +106,71 @@ function normalizeToDataUrl(raw) {
 
 function findImagesInText(text) {
   if (typeof text !== 'string') return [];
-  const results = []; const seen = new Set();
-  const push = x => { const k = x.dataUrl || x.url || x.rawBase64; if (!seen.has(k)) { seen.add(k); results.push(x); } };
+  const results = [];
+  const seen = new Set();
+  const push = x => {
+    const k = x.dataUrl || x.url || x.rawBase64;
+    if (!seen.has(k)) { seen.add(k); results.push(x); }
+  };
   let m;
   const dmRe = /data:image\/[a-z]+;base64,[A-Za-z0-9+/=\s]+?(?=["'\s<)]|$)/gi;
-  while ((m = dmRe.exec(text)) !== null) { try { const norm = normalizeToDataUrl(m[0]); push({ dataUrl: norm.dataUrl, rawBase64: norm.b64 }); } catch {} }
+  while ((m = dmRe.exec(text)) !== null) {
+    try {
+      const norm = normalizeToDataUrl(m[0]);
+      push({ dataUrl: norm.dataUrl, rawBase64: norm.b64 });
+    } catch {}
+  }
   const mdRe = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g;
   while ((m = mdRe.exec(text)) !== null) push({ url: m[1] });
   const buRe = /https?:\/\/[^\s"'<>)]+\.(?:png|jpe?g|gif|webp)(?:\?[^\s"'<>)]*)?/gi;
   while ((m = buRe.exec(text)) !== null) push({ url: m[0] });
   const bbRe = /[A-Za-z0-9+/=]{200,}/g;
-  while ((m = bbRe.exec(text)) !== null) { try { const norm = normalizeToDataUrl(m[0]); push({ dataUrl: norm.dataUrl, rawBase64: norm.b64 }); } catch {} }
+  while ((m = bbRe.exec(text)) !== null) {
+    try {
+      const norm = normalizeToDataUrl(m[0]);
+      push({ dataUrl: norm.dataUrl, rawBase64: norm.b64 });
+    } catch {}
+  }
   return results;
 }
 
 function extractImages(resp) {
-  const results = []; const seen = new Set();
-  const push = x => { const k = x.dataUrl || x.url || x.rawBase64; if (!seen.has(k)) { seen.add(k); results.push(x); } };
+  const results = [];
+  const seen = new Set();
+  const push = x => {
+    const k = x.dataUrl || x.url || x.rawBase64;
+    if (!seen.has(k)) { seen.add(k); results.push(x); }
+  };
   if (resp && Array.isArray(resp.data)) {
     for (const item of resp.data) {
       if (item.url) push({ url: item.url });
-      if (item.b64_json) { try { const norm = normalizeToDataUrl(item.b64_json); push({ dataUrl: norm.dataUrl, rawBase64: norm.b64 }); } catch {} }
+      if (item.b64_json) {
+        try {
+          const norm = normalizeToDataUrl(item.b64_json);
+          push({ dataUrl: norm.dataUrl, rawBase64: norm.b64 });
+        } catch {}
+      }
     }
   }
   if (resp && Array.isArray(resp.choices)) {
     for (const c of resp.choices) {
       const msg = c.message || c.delta || {};
       const content = msg.content;
-      if (typeof content === 'string') { findImagesInText(content).forEach(push); }
-      else if (Array.isArray(content)) {
+      if (typeof content === 'string') {
+        findImagesInText(content).forEach(push);
+      } else if (Array.isArray(content)) {
         for (const part of content) {
           if (part.type === 'image_url' && part.image_url) {
             const u = typeof part.image_url === 'string' ? part.image_url : part.image_url.url;
             if (u) {
-              if (u.startsWith('data:')) { try { const norm = normalizeToDataUrl(u); push({ dataUrl: norm.dataUrl, rawBase64: norm.b64 }); } catch {} }
-              else push({ url: u });
+              if (u.startsWith('data:')) {
+                try {
+                  const norm = normalizeToDataUrl(u);
+                  push({ dataUrl: norm.dataUrl, rawBase64: norm.b64 });
+                } catch {}
+              } else {
+                push({ url: u });
+              }
             }
           }
           if (typeof part.text === 'string') findImagesInText(part.text).forEach(push);
@@ -140,49 +178,42 @@ function extractImages(resp) {
       }
     }
   }
-  if (results.length === 0) { try { findImagesInText(JSON.stringify(resp)).forEach(push); } catch {} }
+  if (results.length === 0) {
+    try { findImagesInText(JSON.stringify(resp)).forEach(push); } catch {}
+  }
   return results;
 }
 
-const b64In = $('b64-input'), b64Preview = $('b64-preview'), b64Img = $('b64-img'), b64Meta = $('b64-meta'), b64Status = $('b64-status'), b64Download = $('b64-download');
+/* ---------- Prompt / Params Helpers ---------- */
+const PROMPT_TEMPLATES = {
+  photo: { name: '写实摄影', text: '一张高质量的写实摄影作品，主体清晰，真实光影，浅景深，电影感，细节丰富。' },
+  poster: { name: '电影海报', text: '电影海报设计，强烈视觉冲击，主体突出，构图平衡，留白合理，商业海报风格。' },
+  product: { name: '电商产品图', text: '高质感电商产品主图，干净背景，柔和棚拍光，材质细节清晰，突出商品卖点。' },
+  anime: { name: '二次元插画', text: '二次元插画风格，线条干净，配色明快，人物立绘完整，表情生动，背景精致。' },
+  portrait: { name: '头像 / 人像', text: '高质量人像/头像，主体居中，面部清晰，肤色自然，构图简洁，柔光。' },
+  lineart: { name: '线稿 / 上色', text: '清晰线稿，边缘干净，结构准确，便于上色，适合插画创作。' }
+};
 
-$('b64-decode').addEventListener('click', () => {
-  setStatus(b64Status, '');
-  try {
-    const { dataUrl, mime, b64 } = normalizeToDataUrl(b64In.value);
-    b64Img.src = dataUrl; b64Download.href = dataUrl;
-    b64Download.download = 'image.' + mime.split('/')[1];
-    const sizeKB = Math.round(b64.length * 0.75 / 1024);
-    b64Meta.innerHTML = `
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div class="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-          <span class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase mb-1">文件类型</span>
-          <span class="font-mono text-brand-600 dark:text-brand-400 text-[13px] break-all">${mime}</span>
-        </div>
-        <div class="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-          <span class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase mb-1">预估体积</span>
-          <span class="font-mono text-brand-600 dark:text-brand-400 text-[13px] break-all">${sizeKB} KB</span>
-        </div>
-      </div>
-      <div class="mt-3 bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-        <span class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase mb-1">Base64 字符总数</span>
-        <span class="font-mono text-slate-700 dark:text-slate-300 text-[13px] break-all">${b64.length}</span>
-      </div>`;
-    b64Preview.classList.remove('hidden');
-    setStatus(b64Status, '解析成功', 'ok');
-  } catch (e) {
-    b64Preview.classList.add('hidden');
-    setStatus(b64Status, e.message, 'err');
-  }
-});
+const ASPECT_SIZE_MAP = {
+  '1:1': '1024x1024',
+  '4:3': '1536x1024',
+  '3:4': '1024x1536',
+  '16:9': '1792x1024',
+  '9:16': '1024x1792'
+};
 
-$('b64-clear').addEventListener('click', () => {
-  b64In.value = ''; b64Preview.classList.add('hidden'); setStatus(b64Status, '');
-});
+function composeFinalPrompt(req) {
+  let p = (req.prompt || '').trim();
+  const negative = (req.negative || '').trim();
+  if (negative) p += `\n\n请避免这些内容：${negative}`;
+  return p;
+}
 
-$('b64-open').addEventListener('click', () => {
-  if (b64Img.src) window.open(b64Img.src, '_blank', 'noopener,noreferrer');
-});
+function syncAspectSelectFromSize() {
+  const size = $('cfg-size').value.trim();
+  const match = Object.entries(ASPECT_SIZE_MAP).find(([, v]) => v === size);
+  $('cfg-aspect').value = match ? match[0] : '';
+}
 
 /* ---------- Tabs ---------- */
 const tabBtns = document.querySelectorAll('.tab-btn');
@@ -225,7 +256,11 @@ function toggleSidebar() {
 
 $('sidebar-toggle').addEventListener('click', toggleSidebar);
 $('mobile-sidebar-toggle').addEventListener('click', toggleSidebar);
-sidebarBackdrop.addEventListener('click', () => { sidebar.classList.remove('mobile-open'); sidebarBackdrop.classList.remove('show'); sidebarCollapsed = true; });
+sidebarBackdrop.addEventListener('click', () => {
+  sidebar.classList.remove('mobile-open');
+  sidebarBackdrop.classList.remove('show');
+  sidebarCollapsed = true;
+});
 
 window.matchMedia('(min-width: 1024px)').addEventListener('change', e => {
   if (e.matches) {
@@ -240,22 +275,29 @@ const PROFILE_KEY = 'imggen-api-profiles-v1';
 const CURRENT_PROFILE_KEY = 'imggen-api-current-v1';
 const LEGACY_CFG_KEY = 'imggen-cfg-v1';
 const apiProfileSel = $('api-profile'), cfgStatus = $('cfg-status');
-const cfgFields = ['baseurl','key','model','reasoning','mode','size','n'];
+const cfgFields = ['baseurl', 'key', 'model', 'reasoning', 'mode', 'size', 'n', 'aspect', 'quality', 'style', 'negative'];
 let apiProfiles = [], activeProfileId = '', cfgSaveTimer = 0;
 
-function readFormCfg() { const o = {}; cfgFields.forEach(k => o[k] = $('cfg-'+k).value.trim()); return o; }
-function writeFormCfg(o) { cfgFields.forEach(k => $('cfg-'+k).value = o[k] ?? ''); }
-function persistProfiles() { localStorage.setItem(PROFILE_KEY, JSON.stringify(apiProfiles)); }
-
+function readFormCfg() {
+  const o = {};
+  cfgFields.forEach(k => o[k] = $('cfg-' + k).value.trim());
+  return o;
+}
+function writeFormCfg(o) {
+  cfgFields.forEach(k => $('cfg-' + k).value = o[k] ?? '');
+}
+function persistProfiles() {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(apiProfiles));
+}
 function renderProfileOptions() {
   apiProfileSel.innerHTML = '';
   apiProfiles.forEach(p => {
     const opt = document.createElement('option');
-    opt.value = p.id; opt.textContent = p.name || 'OpenAI';
+    opt.value = p.id;
+    opt.textContent = p.name || 'OpenAI';
     apiProfileSel.appendChild(opt);
   });
 }
-
 function saveCurrentProfile(silent = false) {
   if (!activeProfileId) return;
   const idx = apiProfiles.findIndex(p => p.id === activeProfileId);
@@ -265,7 +307,6 @@ function saveCurrentProfile(silent = false) {
   localStorage.setItem(CURRENT_PROFILE_KEY, activeProfileId);
   if (!silent) setStatus(cfgStatus, '配置已保存', 'ok');
 }
-
 function applyProfile(id) {
   const p = apiProfiles.find(x => x.id === id);
   if (!p) return;
@@ -274,29 +315,62 @@ function applyProfile(id) {
   apiProfileSel.value = id;
   localStorage.setItem(CURRENT_PROFILE_KEY, id);
   $('api-delete').disabled = apiProfiles.length <= 1;
+  syncAspectSelectFromSize();
   updateModeUI();
 }
-
 function loadApiProfiles() {
   try { apiProfiles = JSON.parse(localStorage.getItem(PROFILE_KEY) || '[]'); } catch { apiProfiles = []; }
   if (!Array.isArray(apiProfiles) || apiProfiles.length === 0) {
     let legacy = null;
     try { legacy = JSON.parse(localStorage.getItem(LEGACY_CFG_KEY) || 'null'); } catch {}
-    apiProfiles = [{ id:'openai', name:'OpenAI', baseurl:'', key:'', model:'', reasoning:'', mode:'images', size:'1024x1024', n:'1', ...(legacy && typeof legacy === 'object' ? legacy : {}) }];
+    apiProfiles = [{
+      id: 'openai',
+      name: 'OpenAI',
+      baseurl: '',
+      key: '',
+      model: '',
+      reasoning: '',
+      mode: 'images',
+      size: '1024x1024',
+      n: '1',
+      aspect: '',
+      quality: '',
+      style: '',
+      negative: '',
+      ...(legacy && typeof legacy === 'object' ? legacy : {})
+    }];
   } else {
     apiProfiles = apiProfiles.map(p => ({
       id: p.id || ('profile_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)),
-      name: p.name || 'OpenAI', baseurl:'', key:'', model:'', reasoning:'', mode:'images', size:'1024x1024', n:'1', ...p
+      name: p.name || 'OpenAI',
+      baseurl: '',
+      key: '',
+      model: '',
+      reasoning: '',
+      mode: 'images',
+      size: '1024x1024',
+      n: '1',
+      aspect: '',
+      quality: '',
+      style: '',
+      negative: '',
+      ...p
     }));
   }
-  persistProfiles(); renderProfileOptions();
+  persistProfiles();
+  renderProfileOptions();
   const savedId = localStorage.getItem(CURRENT_PROFILE_KEY);
   const currentId = apiProfiles.some(p => p.id === savedId) ? savedId : apiProfiles[0].id;
   applyProfile(currentId);
 }
 
 async function detectCurrentApi() {
-  if (activeAbortCtrl) { userAborted = true; activeAbortCtrl.abort(); setStatus(cfgStatus, '正在中断...', ''); return; }
+  if (activeAbortCtrl) {
+    userAborted = true;
+    activeAbortCtrl.abort();
+    setStatus(cfgStatus, '正在中断...', '');
+    return;
+  }
 
   const { baseurl, key, model } = readFormCfg();
   if (!baseurl || !key) return setStatus(cfgStatus, '请先填写 Base URL 和 API Key', 'err');
@@ -350,7 +424,10 @@ async function detectCurrentApi() {
         const found = Array.isArray(json?.data) && json.data.some(x => x.id === modelName);
         log += found ? `✅ 连通成功：当前模型「${modelName}」可用\n` : `✅ 连通成功：接口正常，但未在返回列表中找到「${modelName}」\n`;
         setStatus(cfgStatus, found ? `连通成功：当前模型「${modelName}」可用` : `连通成功：接口正常，但未在返回列表中找到「${modelName}」`, 'ok');
-      } catch { log += '✅ 连通成功：接口正常响应\n'; setStatus(cfgStatus, '连通成功：接口正常响应', 'ok'); }
+      } catch {
+        log += '✅ 连通成功：接口正常响应\n';
+        setStatus(cfgStatus, '连通成功：接口正常响应', 'ok');
+      }
     } else {
       log += '✅ 连通成功：接口正常响应\n';
       setStatus(cfgStatus, '连通成功：接口正常响应', 'ok');
@@ -360,7 +437,9 @@ async function detectCurrentApi() {
     log += `❌ ${isUserAbort ? '用户中断检测' : (e.name === 'AbortError' ? '检测超时，请检查网络或 Base URL' : '检测失败：' + e.message)}\n`;
     setStatus(cfgStatus, isUserAbort ? '用户中断检测' : (e.name === 'AbortError' ? '检测超时，请检查网络或 Base URL' : `检测失败：${e.message}`), 'err');
   } finally {
-    clearTimeout(timer); activeAbortCtrl = null; userAborted = false;
+    clearTimeout(timer);
+    activeAbortCtrl = null;
+    userAborted = false;
     log += `\n${'─'.repeat(40)}\n`;
     debugEl.textContent = log;
   }
@@ -410,7 +489,9 @@ async function fetchModelList() {
     log += `❌ ${isUserAbort ? '用户中断' : (e.name === 'AbortError' ? '请求超时' : '获取失败：' + e.message)}\n`;
     setStatus(cfgStatus, isUserAbort ? '用户中断' : (e.name === 'AbortError' ? '请求超时' : `获取失败：${e.message}`), 'err');
   } finally {
-    clearTimeout(timer); activeAbortCtrl = null; userAborted = false;
+    clearTimeout(timer);
+    activeAbortCtrl = null;
+    userAborted = false;
     log += `\n${'─'.repeat(40)}\n`;
     debugEl.textContent = log;
   }
@@ -418,28 +499,70 @@ async function fetchModelList() {
 
 cfgFields.forEach(k => {
   const el = $('cfg-' + k);
-  el.addEventListener('input', () => { clearTimeout(cfgSaveTimer); cfgSaveTimer = setTimeout(() => saveCurrentProfile(true), 250); });
+  el.addEventListener('input', () => {
+    if (k === 'size') syncAspectSelectFromSize();
+    clearTimeout(cfgSaveTimer);
+    cfgSaveTimer = setTimeout(() => saveCurrentProfile(true), 250);
+  });
   el.addEventListener('change', () => saveCurrentProfile(true));
 });
-apiProfileSel.addEventListener('change', () => { saveCurrentProfile(true); applyProfile(apiProfileSel.value); });
+
+$('cfg-size').addEventListener('input', syncAspectSelectFromSize);
+
+$('cfg-aspect').addEventListener('change', () => {
+  const v = $('cfg-aspect').value;
+  if (ASPECT_SIZE_MAP[v]) $('cfg-size').value = ASPECT_SIZE_MAP[v];
+  syncAspectSelectFromSize();
+  saveCurrentProfile(true);
+});
+
+apiProfileSel.addEventListener('change', () => {
+  saveCurrentProfile(true);
+  applyProfile(apiProfileSel.value);
+});
+
 $('api-new').addEventListener('click', () => {
   saveCurrentProfile(true);
   const name = prompt('新配置名称：', `OpenAI-${apiProfiles.length + 1}`);
   if (!name) return;
-  const p = { id: 'profile_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), name: name.trim() || `OpenAI-${apiProfiles.length + 1}`, ...readFormCfg() };
-  apiProfiles.push(p); persistProfiles(); renderProfileOptions(); applyProfile(p.id);
+  const p = {
+    id: 'profile_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+    name: name.trim() || `OpenAI-${apiProfiles.length + 1}`,
+    ...readFormCfg()
+  };
+  apiProfiles.push(p);
+  persistProfiles();
+  renderProfileOptions();
+  applyProfile(p.id);
   setStatus(cfgStatus, `已创建「${p.name}」`, 'ok');
 });
+
 $('api-delete').addEventListener('click', () => {
   if (apiProfiles.length <= 1) return setStatus(cfgStatus, '至少保留一个 API 配置', 'err');
-  const id = apiProfileSel.value; const p = apiProfiles.find(x => x.id === id);
+  const id = apiProfileSel.value;
+  const p = apiProfiles.find(x => x.id === id);
   if (!confirm(`确认删除「${p?.name || id}」？`)) return;
-  apiProfiles = apiProfiles.filter(x => x.id !== id); persistProfiles(); renderProfileOptions(); applyProfile(apiProfiles[0].id);
+  apiProfiles = apiProfiles.filter(x => x.id !== id);
+  persistProfiles();
+  renderProfileOptions();
+  applyProfile(apiProfiles[0].id);
   setStatus(cfgStatus, '已删除配置', 'ok');
 });
+
 $('cfg-save').addEventListener('click', () => saveCurrentProfile(false));
 $('api-detect').addEventListener('click', detectCurrentApi);
 $('api-fetch-models').addEventListener('click', fetchModelList);
+
+/* ---------- Prompt template ---------- */
+$('apply-prompt-template').addEventListener('click', () => {
+  const tpl = PROMPT_TEMPLATES[$('prompt-template').value];
+  if (!tpl) return toast('请选择一个模板', 'err');
+
+  if (promptEl.value.trim() && !confirm('当前 Prompt 会被覆盖，继续吗？')) return;
+  promptEl.value = tpl.text;
+  promptEl.focus();
+  toast(`已套用模板：${tpl.name}`, 'ok');
+});
 
 /* ---------- Generation / Thread System ---------- */
 const chatEl = $('chat'), genStatus = $('gen-status');
@@ -499,7 +622,8 @@ function buildVersionContent(version) {
     const meta = document.createElement('div');
     meta.className = 'text-[11px] sm:text-[12px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-2.5 rounded-md break-all space-y-1';
     if (version.hits.length === 1) {
-      const hit = version.hits[0], href = safeUrl(hit.dataUrl || hit.url) || '#';
+      const hit = version.hits[0];
+      const href = safeUrl(hit.dataUrl || hit.url) || '#';
       meta.innerHTML = `<span class="font-medium text-slate-600 dark:text-slate-300 block sm:inline">资源链接:</span>
         <a href="${href}" target="_blank" rel="noreferrer noopener" class="text-brand-600 dark:text-brand-400 hover:underline inline-flex items-center gap-1">${hit.dataUrl ? '内嵌 Base64 数据' : '外联链接'}</a>`;
     } else {
@@ -535,8 +659,11 @@ function buildToolbarNode(thread) {
     <button type="button" class="thread-tool-btn th-copy ml-1" title="复制生成内容">⧉</button>
     <button type="button" class="thread-tool-btn th-regen" title="重新生成当前分支">↻</button>`;
   thread.controls = {
-    prev: toolbar.querySelector('.th-prev'), next: toolbar.querySelector('.th-next'),
-    counter: toolbar.querySelector('.th-counter'), copy: toolbar.querySelector('.th-copy'), regen: toolbar.querySelector('.th-regen')
+    prev: toolbar.querySelector('.th-prev'),
+    next: toolbar.querySelector('.th-next'),
+    counter: toolbar.querySelector('.th-counter'),
+    copy: toolbar.querySelector('.th-copy'),
+    regen: toolbar.querySelector('.th-regen')
   };
   thread.controls.prev.addEventListener('click', () => { if (thread.activeIndex > 0) switchThreadVersion(thread.id, thread.activeIndex - 1); });
   thread.controls.next.addEventListener('click', () => { if (thread.activeIndex < thread.versions.length - 1) switchThreadVersion(thread.id, thread.activeIndex + 1); });
@@ -546,7 +673,8 @@ function buildToolbarNode(thread) {
 }
 
 function updateThreadToolbar(thread) {
-  const c = thread.controls; if (!c) return;
+  const c = thread.controls;
+  if (!c) return;
   const total = thread.versions.length, idx = thread.activeIndex;
   c.counter.textContent = total > 0 && idx >= 0 ? `${idx + 1}/${total}` : '0/0';
   const hasVersion = total > 0 && idx >= 0, currentVersion = hasVersion ? thread.versions[idx] : null;
@@ -557,25 +685,14 @@ function updateThreadToolbar(thread) {
   c.regen.disabled = generating || !hasVersion;
 }
 
-function refreshAllThreadToolbars() { threads.forEach(updateThreadToolbar); }
+function refreshAllThreadToolbars() {
+  threads.forEach(updateThreadToolbar);
+}
 
-function createThreadShell(req) {
-  const threadId = 'thread_' + (threadSeq++);
-  const thread = { id: threadId, req: { ...req, files: [...req.files] }, el: null, assistantBubble: null, toolbar: null, controls: null, versions: [], activeIndex: -1 };
-  const threadEl = document.createElement('div'); threadEl.className = 'flex flex-col gap-2'; thread.el = threadEl;
-  const userWrap = renderUserBubble(req, threadId);
-  const assistantWrap = document.createElement('div'); assistantWrap.className = 'flex flex-col gap-1.5 items-start';
-  const label = document.createElement('div'); label.className = 'text-[11px] font-semibold tracking-wider px-1 text-slate-400 dark:text-slate-500'; label.textContent = 'AI Assistant';
-  const assistantBubble = document.createElement('div');
-  assistantBubble.className = 'msg-bubble px-4 sm:px-5 py-3 sm:py-3.5 rounded-2xl text-[13px] sm:text-[14px] leading-relaxed max-w-[95%] sm:max-w-[85%] break-words bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 shadow-sm overflow-hidden';
-  thread.assistantBubble = assistantBubble;
-  thread.toolbar = buildToolbarNode(thread);
-  assistantWrap.appendChild(label); assistantWrap.appendChild(assistantBubble); assistantWrap.appendChild(thread.toolbar);
-  threadEl.appendChild(userWrap); threadEl.appendChild(assistantWrap);
-  chatEl.appendChild(threadEl);
-  threads.set(threadId, thread); lastThreadId = threadId;
-  chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: 'smooth' });
-  return thread;
+function buildUserBubbleHtml(req) {
+  let html = `<div class="whitespace-pre-wrap break-words">${escapeHtml(req.prompt)}</div>`;
+  if (req.mode === 'edits' && req.files && req.files.length) html += `<div class="mt-3 text-[11px] opacity-90">参考图：${req.files.length} 张</div>`;
+  return html;
 }
 
 function renderUserBubble(req, threadId) {
@@ -586,9 +703,7 @@ function renderUserBubble(req, threadId) {
   label.textContent = 'You';
   const bubble = document.createElement('div');
   bubble.className = 'msg-bubble px-4 sm:px-5 py-3 sm:py-3.5 rounded-2xl text-[13px] sm:text-[14px] leading-relaxed max-w-[95%] sm:max-w-[85%] break-words bg-brand-600 dark:bg-brand-500 text-white shadow-sm';
-  let html = `<div class="whitespace-pre-wrap break-words">${escapeHtml(req.prompt)}</div>`;
-  if (req.mode === 'edits' && req.files && req.files.length) html += `<div class="mt-3 text-[11px] opacity-90">参考图：${req.files.length} 张</div>`;
-  bubble.innerHTML = html;
+  bubble.innerHTML = buildUserBubbleHtml(req);
   const toolbar = document.createElement('div');
   toolbar.className = 'user-toolbar';
   toolbar.innerHTML = `
@@ -608,20 +723,59 @@ function renderUserBubble(req, threadId) {
   wrap.appendChild(label);
   wrap.appendChild(bubble);
   wrap.appendChild(toolbar);
+  wrap._bubble = bubble;
   return wrap;
 }
 
+function createThreadShell(req) {
+  const threadId = 'thread_' + (threadSeq++);
+  const thread = { id: threadId, req: { ...req, files: [...req.files] }, el: null, assistantBubble: null, toolbar: null, controls: null, versions: [], activeIndex: -1, userBubble: null };
+  const threadEl = document.createElement('div');
+  threadEl.className = 'flex flex-col gap-2';
+  thread.el = threadEl;
+
+  const userWrap = renderUserBubble(req, threadId);
+  thread.userBubble = userWrap._bubble || userWrap.querySelector('.msg-bubble');
+
+  const assistantWrap = document.createElement('div');
+  assistantWrap.className = 'flex flex-col gap-1.5 items-start';
+  const label = document.createElement('div');
+  label.className = 'text-[11px] font-semibold tracking-wider px-1 text-slate-400 dark:text-slate-500';
+  label.textContent = 'AI Assistant';
+  const assistantBubble = document.createElement('div');
+  assistantBubble.className = 'msg-bubble px-4 sm:px-5 py-3 sm:py-3.5 rounded-2xl text-[13px] sm:text-[14px] leading-relaxed max-w-[95%] sm:max-w-[85%] break-words bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 shadow-sm overflow-hidden';
+  thread.assistantBubble = assistantBubble;
+  thread.toolbar = buildToolbarNode(thread);
+
+  assistantWrap.appendChild(label);
+  assistantWrap.appendChild(assistantBubble);
+  assistantWrap.appendChild(thread.toolbar);
+  threadEl.appendChild(userWrap);
+  threadEl.appendChild(assistantWrap);
+  chatEl.appendChild(threadEl);
+  threads.set(threadId, thread);
+  lastThreadId = threadId;
+  chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: 'smooth' });
+  return thread;
+}
+
 function switchThreadVersion(threadId, index) {
-  const thread = threads.get(threadId); if (!thread) return;
+  const thread = threads.get(threadId);
+  if (!thread) return;
   if (index < 0 || index >= thread.versions.length) return;
-  thread.activeIndex = index; renderThreadContent(thread, index); updateThreadToolbar(thread);
+  thread.activeIndex = index;
+  renderThreadContent(thread, index);
+  updateThreadToolbar(thread);
 }
 
 function getCopyPayloadFromVersion(version) {
   if (version.hits && version.hits.length) {
     return version.hits.map(hit => {
       if (hit.rawBase64) return hit.rawBase64;
-      if (hit.dataUrl) { const idx = hit.dataUrl.indexOf(','); return idx >= 0 ? hit.dataUrl.slice(idx + 1) : hit.dataUrl; }
+      if (hit.dataUrl) {
+        const idx = hit.dataUrl.indexOf(',');
+        return idx >= 0 ? hit.dataUrl.slice(idx + 1) : hit.dataUrl;
+      }
       return hit.url || '';
     }).filter(Boolean).join('\n');
   }
@@ -631,12 +785,24 @@ function getCopyPayloadFromVersion(version) {
 }
 
 async function copyCurrentVersion(threadId) {
-  const thread = threads.get(threadId); if (!thread) return;
+  const thread = threads.get(threadId);
+  if (!thread) return;
   const v = thread.versions[thread.activeIndex];
+  if (!v) {
+    setStatus(genStatus, '没有可复制的内容', 'err');
+    return;
+  }
   const payload = getCopyPayloadFromVersion(v);
-  if (!payload) { setStatus(genStatus, '没有可复制的内容', 'err'); return; }
-  try { await copyTextToClipboard(payload); setStatus(genStatus, v.hits && v.hits.length ? '已复制生成图像内容' : '已复制文本内容', 'ok'); }
-  catch (e) { setStatus(genStatus, '复制失败：' + e.message, 'err'); }
+  if (!payload) {
+    setStatus(genStatus, '没有可复制的内容', 'err');
+    return;
+  }
+  try {
+    await copyTextToClipboard(payload);
+    setStatus(genStatus, v.hits && v.hits.length ? '已复制生成图像内容' : '已复制文本内容', 'ok');
+  } catch (e) {
+    setStatus(genStatus, '复制失败：' + e.message, 'err');
+  }
 }
 
 function setGenBusy(on) {
@@ -657,91 +823,229 @@ function setGenBusy(on) {
 
 function readGenerationReq() {
   return {
-    baseurl: $('cfg-baseurl').value.trim(), key: $('cfg-key').value.trim(), model: $('cfg-model').value.trim(),
-    reasoning: $('cfg-reasoning').value.trim(), mode: $('cfg-mode').value, size: $('cfg-size').value.trim(),
-    n: parseInt($('cfg-n').value.trim() || '1', 10) || 1, prompt: promptEl.value.trim(), files: imageFiles.map(x => x.file)
+    baseurl: $('cfg-baseurl').value.trim(),
+    key: $('cfg-key').value.trim(),
+    model: $('cfg-model').value.trim(),
+    reasoning: $('cfg-reasoning').value.trim(),
+    mode: $('cfg-mode').value,
+    size: $('cfg-size').value.trim(),
+    n: parseInt($('cfg-n').value.trim() || '1', 10) || 1,
+    quality: $('cfg-quality').value.trim(),
+    style: $('cfg-style').value.trim(),
+    aspect: $('cfg-aspect').value.trim(),
+    negative: $('cfg-negative').value.trim(),
+    prompt: promptEl.value.trim(),
+    files: imageFiles.map(x => x.file)
   };
 }
 
-/* ---------- History ---------- */
-const HISTORY_KEY = 'imggen-history-v2';
+/* ---------- History (IndexedDB + fallback) ---------- */
+const HISTORY_DB = 'imggen-history-db-v1';
+const HISTORY_STORE = 'entries';
+const HISTORY_KEY = 'imggen-history-v2'; // legacy fallback key
 const MAX_HISTORY = 50;
 
-function loadHistory() {
+let historyDBPromise = null;
+let legacyHistoryMigrated = false;
+let historyRenderSeq = 0;
+
+function loadHistoryFallback() {
   try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
 }
-
-function saveHistory(entries) {
+function saveHistoryFallback(entries) {
   try {
     const trimmed = entries.slice(0, MAX_HISTORY);
     localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
   } catch (e) {
-    if (e.name === 'QuotaExceededError') {
+    if (e && e.name === 'QuotaExceededError') {
       const half = entries.slice(Math.floor(entries.length / 2));
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(half));
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(half)); } catch {}
       toast('存储空间不足，已清理一半旧记录', 'err');
     }
   }
 }
-
-function addHistoryEntry(version, threadReq) {
-  const entries = loadHistory();
-  const entry = {
-    id: version.id,
-    timestamp: Date.now(),
-    prompt: threadReq.prompt,
-    mode: threadReq.mode,
-    model: threadReq.model,
-    status: version.status,
-    hits: version.hits ? version.hits.map(h => ({ dataUrl: h.dataUrl || '', url: h.url || '', rawBase64: h.rawBase64 || '' })) : [],
-    textOut: version.textOut || '',
-    errorMsg: version.errorMsg || ''
-  };
-  entries.unshift(entry);
-  saveHistory(entries);
-  renderHistoryDrawer();
+function sortHistoryEntries(entries) {
+  return (entries || []).slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 }
+function openHistoryDB() {
+  if (!('indexedDB' in window)) return Promise.reject(new Error('IndexedDB 不可用'));
+  if (historyDBPromise) return historyDBPromise;
 
-function deleteHistoryEntry(id) {
-  let entries = loadHistory();
-  entries = entries.filter(e => e.id !== id);
-  saveHistory(entries);
-  renderHistoryDrawer();
+  historyDBPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(HISTORY_DB, 1);
+
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(HISTORY_STORE)) {
+        const store = db.createObjectStore(HISTORY_STORE, { keyPath: 'id' });
+        store.createIndex('timestamp', 'timestamp', { unique: false });
+        store.createIndex('mode', 'mode', { unique: false });
+        store.createIndex('status', 'status', { unique: false });
+        store.createIndex('model', 'model', { unique: false });
+      }
+    };
+
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => {
+      historyDBPromise = null;
+      reject(req.error);
+    };
+    req.onblocked = () => {
+      historyDBPromise = null;
+      reject(new Error('IndexedDB 被阻塞'));
+    };
+  });
+
+  return historyDBPromise;
 }
-
-function deleteAllHistory() {
-  if (!confirm('确认清空全部历史记录？此操作不可撤销。')) return;
-  saveHistory([]);
-  renderHistoryDrawer();
+function txDone(tx) {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB 事务中止'));
+  });
 }
-
-function formatTime(ts) {
-  const d = new Date(ts);
-  const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function reqToPromise(req) {
+  return new Promise((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
 }
+async function migrateLegacyHistoryIfNeeded() {
+  if (legacyHistoryMigrated) return;
+  legacyHistoryMigrated = true;
 
-function getHistoryThumbnail(entry) {
-  if (entry.hits && entry.hits.length > 0) {
-    const hit = entry.hits[0];
-    const src = safeUrl(hit.dataUrl || hit.url);
-    if (src) return src;
+  const legacy = loadHistoryFallback();
+  if (!Array.isArray(legacy) || legacy.length === 0) return;
+
+  try {
+    const db = await openHistoryDB();
+    const tx = db.transaction(HISTORY_STORE, 'readwrite');
+    const store = tx.objectStore(HISTORY_STORE);
+    for (const item of legacy) {
+      if (item && item.id) store.put(item);
+    }
+    await txDone(tx);
+    localStorage.removeItem(HISTORY_KEY);
+  } catch {}
+}
+async function loadHistory() {
+  try {
+    await migrateLegacyHistoryIfNeeded();
+    const db = await openHistoryDB();
+    const tx = db.transaction(HISTORY_STORE, 'readonly');
+    const store = tx.objectStore(HISTORY_STORE);
+    const rows = await reqToPromise(store.getAll());
+    return sortHistoryEntries(rows || []);
+  } catch {
+    return sortHistoryEntries(loadHistoryFallback());
   }
-  return null;
 }
+async function putHistoryEntry(entry) {
+  try {
+    const db = await openHistoryDB();
+    const tx = db.transaction(HISTORY_STORE, 'readwrite');
+    const store = tx.objectStore(HISTORY_STORE);
+    store.put(entry);
+    await txDone(tx);
 
-function renderHistoryDrawer() {
+    const all = await loadHistory();
+    if (all.length > MAX_HISTORY) {
+      const keep = all.slice(0, MAX_HISTORY);
+      const tx2 = db.transaction(HISTORY_STORE, 'readwrite');
+      const store2 = tx2.objectStore(HISTORY_STORE);
+      await reqToPromise(store2.clear());
+      for (const e of keep) store2.put(e);
+      await txDone(tx2);
+    }
+  } catch {
+    const all = loadHistoryFallback();
+    all.unshift(entry);
+    saveHistoryFallback(all.slice(0, MAX_HISTORY));
+  }
+}
+async function deleteHistoryEntry(id) {
+  try {
+    const db = await openHistoryDB();
+    const tx = db.transaction(HISTORY_STORE, 'readwrite');
+    tx.objectStore(HISTORY_STORE).delete(id);
+    await txDone(tx);
+  } catch {
+    const all = loadHistoryFallback().filter(e => e.id !== id);
+    saveHistoryFallback(all);
+  }
+  void renderHistoryDrawer();
+}
+async function deleteAllHistory() {
+  if (!confirm('确认清空全部历史记录？此操作不可撤销。')) return;
+
+  try {
+    const db = await openHistoryDB();
+    const tx = db.transaction(HISTORY_STORE, 'readwrite');
+    tx.objectStore(HISTORY_STORE).clear();
+    await txDone(tx);
+  } catch {
+    saveHistoryFallback([]);
+  }
+
+  void renderHistoryDrawer();
+}
+function getHistoryFilters() {
+  return {
+    q: $('history-search').value.trim().toLowerCase(),
+    mode: $('history-mode-filter').value,
+    status: $('history-status-filter').value
+  };
+}
+function filterHistoryEntries(entries) {
+  const f = getHistoryFilters();
+  return entries.filter(e => {
+    const hay = [
+      e.prompt || '',
+      e.model || '',
+      e.errorMsg || '',
+      e.mode || '',
+      e.status || '',
+      e.textOut || '',
+      e.size || '',
+      e.quality || '',
+      e.style || '',
+      e.negative || '',
+      e.aspect || '',
+      e.reasoning || ''
+    ].join(' ').toLowerCase();
+
+    if (f.q && !hay.includes(f.q)) return false;
+    if (f.mode && e.mode !== f.mode) return false;
+    if (f.status && e.status !== f.status) return false;
+    return true;
+  });
+}
+async function renderHistoryDrawer() {
+  const seq = ++historyRenderSeq;
   const list = $('history-list');
-  const entries = loadHistory();
-  if (entries.length === 0) {
+  const entries = await loadHistory();
+  if (seq !== historyRenderSeq) return;
+
+  const filtered = filterHistoryEntries(entries);
+  $('history-count').textContent = `${filtered.length} / ${entries.length} 条`;
+
+  if (filtered.length === 0) {
     list.innerHTML = '<div class="text-center text-sm text-slate-400 dark:text-slate-500 py-8">暂无历史记录</div>';
     return;
   }
-  list.innerHTML = entries.map(e => {
+
+  list.innerHTML = filtered.map(e => {
+    const hits = Array.isArray(e.hits) ? e.hits : [];
     const thumb = getHistoryThumbnail(e);
     const modeLabel = e.mode === 'edits' ? 'Edits' : e.mode === 'chat' ? 'Chat' : 'Images';
-    const modeColor = e.mode === 'edits' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400' : e.mode === 'chat' ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400' : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400';
+    const modeColor = e.mode === 'edits'
+      ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400'
+      : e.mode === 'chat'
+        ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400'
+        : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400';
     const statusIcon = e.status === 'done' ? '✅' : '❌';
+
     return `<div class="hist-entry bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-3 hover:border-brand-400 dark:hover:border-brand-500 cursor-pointer transition-colors group" data-id="${e.id}">
       <div class="flex gap-3">
         ${thumb ? `<div class="w-14 h-14 shrink-0 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-800"><img src="${thumb}" class="w-full h-full object-cover checkerboard" alt="" /></div>` : `<div class="w-14 h-14 shrink-0 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 text-lg">${statusIcon}</div>`}
@@ -753,7 +1057,7 @@ function renderHistoryDrawer() {
           <div class="flex items-center gap-2 mt-1.5">
             <span class="text-[10px] text-slate-400 dark:text-slate-500">${formatTime(e.timestamp)}</span>
             <span class="text-[10px] px-1.5 py-0.5 rounded font-medium ${modeColor}">${modeLabel}</span>
-            ${e.hits.length > 0 ? `<span class="text-[10px] text-slate-400 dark:text-slate-500">${e.hits.length} 张</span>` : ''}
+            ${hits.length > 0 ? `<span class="text-[10px] text-slate-400 dark:text-slate-500">${hits.length} 张</span>` : ''}
             ${e.status === 'error' ? `<span class="text-[10px] text-rose-500 dark:text-rose-400">${escapeHtml(e.errorMsg || '失败')}</span>` : ''}
           </div>
         </div>
@@ -762,28 +1066,50 @@ function renderHistoryDrawer() {
   }).join('');
 
   list.querySelectorAll('.delete-hist-btn').forEach(btn => {
-    btn.addEventListener('click', e => { e.stopPropagation(); deleteHistoryEntry(btn.dataset.id); });
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      void deleteHistoryEntry(btn.dataset.id);
+    });
   });
+
   list.querySelectorAll('.hist-entry').forEach(el => {
-    el.addEventListener('click', () => showHistoryDetail(el.dataset.id));
+    el.addEventListener('click', () => void showHistoryDetail(el.dataset.id));
   });
+}
+function getHistoryThumbnail(entry) {
+  if (entry.hits && entry.hits.length > 0) {
+    const hit = entry.hits[0];
+    const src = safeUrl(hit.dataUrl || hit.url);
+    if (src) return src;
+  }
+  return null;
+}
+function formatTime(ts) {
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /* ---------- History Detail Modal ---------- */
-function showHistoryDetail(id) {
-  const entries = loadHistory();
+async function showHistoryDetail(id) {
+  const entries = await loadHistory();
   const entry = entries.find(e => e.id === id);
   if (!entry) return;
 
   const body = $('detail-body');
   const modeLabel = entry.mode === 'edits' ? 'Edits' : entry.mode === 'chat' ? 'Chat' : 'Images';
-  const modeColor = entry.mode === 'edits' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400' : entry.mode === 'chat' ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400' : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400';
+  const modeColor = entry.mode === 'edits'
+    ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400'
+    : entry.mode === 'chat'
+      ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-400'
+      : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400';
 
+  const hits = Array.isArray(entry.hits) ? entry.hits : [];
   let imagesHtml = '';
-  if (entry.hits && entry.hits.length > 0) {
+  if (hits.length > 0) {
     imagesHtml = `<div class="space-y-3">
-      <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">生成结果 (${entry.hits.length} 张)</h4>
-      ${entry.hits.map((hit, i) => {
+      <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">生成结果 (${hits.length} 张)</h4>
+      ${hits.map((hit, i) => {
         const src = safeUrl(hit.dataUrl || hit.url);
         if (!src) return '';
         return `<div class="bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-2">
@@ -802,6 +1128,7 @@ function showHistoryDetail(id) {
       <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Prompt</h4>
       <p class="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words">${escapeHtml(entry.prompt || '(无 Prompt)')}</p>
     </div>
+
     <div class="flex flex-wrap gap-3">
       <div class="bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2.5">
         <span class="text-[10px] text-slate-400 dark:text-slate-500 block mb-0.5">时间</span>
@@ -820,8 +1147,28 @@ function showHistoryDetail(id) {
         <span class="text-sm ${entry.status === 'done' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'}">${entry.status === 'done' ? '成功' : '失败'}</span>
       </div>
     </div>
+
+    ${(entry.size || entry.quality || entry.style || entry.aspect || entry.reasoning || entry.negative) ? `
+      <div class="bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+        <h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">参数</h4>
+        <div class="flex flex-wrap gap-2 text-xs">
+          ${entry.size ? `<span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">Size: ${escapeHtml(entry.size)}</span>` : ''}
+          ${entry.aspect ? `<span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">Aspect: ${escapeHtml(entry.aspect)}</span>` : ''}
+          ${entry.quality ? `<span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">Quality: ${escapeHtml(entry.quality)}</span>` : ''}
+          ${entry.style ? `<span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">Style: ${escapeHtml(entry.style)}</span>` : ''}
+          ${entry.reasoning ? `<span class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">Reasoning: ${escapeHtml(entry.reasoning)}</span>` : ''}
+        </div>
+        ${entry.negative ? `<div>
+          <div class="text-[11px] text-slate-400 dark:text-slate-500 uppercase mb-1 font-bold">Negative Prompt</div>
+          <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">${escapeHtml(entry.negative)}</p>
+        </div>` : ''}
+      </div>
+    ` : ''}
+
     ${entry.status === 'error' ? `<div class="bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 rounded-xl p-4"><span class="text-xs font-bold text-rose-600 dark:text-rose-400 block mb-1">错误信息</span><p class="text-sm text-rose-700 dark:text-rose-300">${escapeHtml(entry.errorMsg || '未知错误')}</p></div>` : ''}
+
     ${imagesHtml}
+
     ${entry.textOut ? `<div class="bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-4"><h4 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">文本输出</h4><p class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">${escapeHtml(entry.textOut)}</p></div>` : ''}
   `;
 
@@ -849,10 +1196,19 @@ function closeDetailModal() {
 
 /* ---------- Generate logic ---------- */
 async function generateIntoThread(thread, req) {
-  if (generating) { setStatus(genStatus, '当前已有请求在进行中', 'err'); return; }
+  if (generating) {
+    setStatus(genStatus, '当前已有请求在进行中', 'err');
+    return;
+  }
   const version = {
     id: 'ver_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-    prompt: req.prompt, status: 'loading', rawText: '', resp: null, hits: [], textOut: '', errorMsg: ''
+    prompt: req.prompt,
+    status: 'loading',
+    rawText: '',
+    resp: null,
+    hits: [],
+    textOut: '',
+    errorMsg: ''
   };
   thread.req = { ...req, files: [...req.files] };
   thread.versions.push(version);
@@ -872,42 +1228,70 @@ async function generateIntoThread(thread, req) {
   let allTextOut = [];
   let allErrors = [];
   let firstRawText = '';
+  const hitSeen = new Set();
+
+  const pushHit = hit => {
+    const key = hit.dataUrl || hit.url || hit.rawBase64;
+    if (!key || hitSeen.has(key)) return;
+    hitSeen.add(key);
+    allHits.push(hit);
+  };
 
   async function doOneRequest(index) {
     let url, fetchOpts;
     if (req.mode === 'edits') {
       url = buildApiUrl(req.baseurl, '/v1/images/edits');
       const fd = new FormData();
-      fd.append('model', req.model); fd.append('prompt', req.prompt); fd.append('n', '1');
+      fd.append('model', req.model);
+      fd.append('prompt', composeFinalPrompt(req));
+      fd.append('n', '1');
       if (req.size) fd.append('size', req.size);
       if (req.reasoning) fd.append('reasoning_effort', req.reasoning);
+      if (req.quality) fd.append('quality', req.quality);
+      if (req.style) fd.append('style', req.style);
       req.files.forEach((file, idx) => fd.append('image', file, file.name || `image_${idx}.png`));
       fetchOpts = { method: 'POST', headers: { Authorization: 'Bearer ' + req.key, Accept: 'application/json' }, body: fd, signal: ctrl.signal };
     } else {
       url = buildApiUrl(req.baseurl, req.mode === 'chat' ? '/v1/chat/completions' : '/v1/images/generations');
       let body;
-      if (req.mode === 'chat') { body = { model: req.model, messages: [{ role: 'user', content: req.prompt }], n: 1 }; }
-      else { body = { model: req.model, prompt: req.prompt, n: 1, size: req.size }; }
+      if (req.mode === 'chat') {
+        body = { model: req.model, messages: [{ role: 'user', content: composeFinalPrompt(req) }], n: 1 };
+      } else {
+        body = { model: req.model, prompt: composeFinalPrompt(req), n: 1 };
+        if (req.size) body.size = req.size;
+        if (req.quality) body.quality = req.quality;
+        if (req.style) body.style = req.style;
+      }
       if (req.reasoning) body.reasoning_effort = req.reasoning;
       fetchOpts = { method: 'POST', headers: { Authorization: 'Bearer ' + req.key, 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal };
     }
 
-    const t0 = Date.now();
-    const r = await fetch(url, fetchOpts);
-    const rawText = await r.text();
-    const lat = Date.now() - t0;
+    let r, rawText, subLog, resp;
+    try {
+      const t0 = Date.now();
+      r = await fetch(url, fetchOpts);
+      rawText = await r.text();
+      const lat = Date.now() - t0;
+      resp = null;
+      try { resp = JSON.parse(rawText); } catch { resp = rawText; }
 
-    let resp = null; try { resp = JSON.parse(rawText); } catch { resp = rawText; }
-
-    let subLog = `[${new Date().toLocaleTimeString()}] 子请求 #${index + 1}/${req.n}\n`;
-    subLog += `→ ${fetchOpts.method} ${url} (${lat}ms)\n`;
-    subLog += `→ HTTP ${r.status} ${r.statusText}\n`;
-    subLog += `→ Response:\n${typeof resp === 'string' ? resp : JSON.stringify(resp, null, 2)}\n`;
-    subLog += `${'─'.repeat(40)}\n`;
+      subLog = `[${new Date().toLocaleTimeString()}] 子请求 #${index + 1}/${req.n}\n`;
+      subLog += `→ ${fetchOpts.method} ${url} (${lat}ms)\n`;
+      subLog += `→ HTTP ${r.status} ${r.statusText}\n`;
+      subLog += `→ Response:\n${typeof resp === 'string' ? resp : JSON.stringify(resp, null, 2)}\n`;
+      subLog += `${'─'.repeat(40)}\n`;
+    } catch (e) {
+      subLog = `[${new Date().toLocaleTimeString()}] 子请求 #${index + 1}/${req.n}\n`;
+      subLog += `→ 网络异常：${e.name === 'AbortError' ? (userAborted ? '用户中断' : '请求超时') : e.message}\n`;
+      subLog += `${'─'.repeat(40)}\n`;
+      return { ok: false, subLog, errorMsg: e.name === 'AbortError' ? (userAborted ? '用户中断请求' : '请求超时') : e.message };
+    }
 
     setStatus(genStatus, `请求发送中 (${index + 1}/${req.n})...`, '');
 
-    if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + r.statusText);
+    if (!r.ok) {
+      return { ok: false, subLog, errorMsg: `HTTP ${r.status} ${r.statusText}`, rawText, resp };
+    }
 
     const hits = extractImages(resp);
     let textOut = '';
@@ -917,32 +1301,42 @@ async function generateIntoThread(thread, req) {
         if (typeof m.content === 'string') textOut += m.content;
       }
     }
-    return { rawText, resp, hits, textOut, subLog };
+    return { ok: true, rawText, resp, hits, textOut, subLog };
   }
 
   try {
-    const tasks = [];
-    for (let i = 0; i < req.n; i++) {
-      tasks.push(doOneRequest(i));
-    }
+    combinedLog = `[${new Date().toLocaleTimeString()}] 开始发送 ${req.n} 次请求\n`;
+    combinedLog += `→ Model: ${req.model} | Mode: ${req.mode} | Size: ${req.size || '-'} | Quality: ${req.quality || '-'} | Style: ${req.style || '-'}\n`;
+    combinedLog += `→ Prompt: ${composeFinalPrompt(req).slice(0, 200)}${composeFinalPrompt(req).length > 200 ? '…' : ''}\n`;
+    combinedLog += `${'─'.repeat(40)}\n`;
+    debugEl.textContent = combinedLog;
 
+    const tasks = [];
+    for (let i = 0; i < req.n; i++) tasks.push(doOneRequest(i));
     const results = await Promise.allSettled(tasks);
 
     for (const result of results) {
       if (result.status === 'fulfilled') {
-        const { rawText, resp, hits, textOut, subLog } = result.value;
-        combinedLog += subLog;
-        if (!firstRawText) firstRawText = rawText;
-        allHits.push(...hits);
-        if (textOut) allTextOut.push(textOut);
+        const data = result.value;
+        combinedLog += data.subLog;
+        if (data.ok) {
+          if (!firstRawText) firstRawText = data.rawText;
+          (data.hits || []).forEach(pushHit);
+          if (data.textOut) allTextOut.push(data.textOut);
+        } else {
+          allErrors.push(data.errorMsg || '未知错误');
+        }
       } else {
         const errMsg = result.reason ? result.reason.message : '未知错误';
         allErrors.push(errMsg);
-        combinedLog += `[${new Date().toLocaleTimeString()}] ❌ 子请求失败：${errMsg}\n${'─'.repeat(40)}\n`;
+        combinedLog += `[${new Date().toLocaleTimeString()}] ❌ 子请求异常：${errMsg}\n${'─'.repeat(40)}\n`;
       }
+      debugEl.textContent = combinedLog;
     }
 
-    combinedLog += `\n总计：${req.n} 次请求，成功 ${results.filter(r => r.status === 'fulfilled').length}，失败 ${allErrors.length}\n`;
+    const successCount = results.filter(r => r.status === 'fulfilled' && r.value && r.value.ok).length;
+    const failCount = req.n - successCount;
+    combinedLog += `\n总计：${req.n} 次请求，成功 ${successCount}，失败 ${failCount}\n`;
     combinedLog += `${'─'.repeat(40)}\n`;
     debugEl.textContent = combinedLog;
 
@@ -958,17 +1352,13 @@ async function generateIntoThread(thread, req) {
     renderThreadContent(thread, thread.activeIndex);
     updateThreadToolbar(thread);
 
-    addHistoryEntry(version, thread.req);
+    await addHistoryEntry(version, thread.req);
 
     const totalHits = allHits.length;
     setStatus(genStatus, totalHits > 0 ? (totalHits === 1 ? '生成完成' : `生成完成 (${totalHits} 张)`) : (allTextOut.length > 0 ? '生成完成（文本）' : '未识别到内容'), totalHits > 0 || allTextOut.length > 0 ? 'ok' : 'err');
   } catch (e) {
     version.status = 'error';
-    if (e.name === 'AbortError') {
-      version.errorMsg = userAborted ? '用户中断请求' : '请求超时';
-    } else {
-      version.errorMsg = e.message;
-    }
+    version.errorMsg = e.name === 'AbortError' ? (userAborted ? '用户中断请求' : '请求超时') : e.message;
     renderThreadContent(thread, thread.activeIndex);
     updateThreadToolbar(thread);
     setStatus(genStatus, version.errorMsg, 'err');
@@ -977,30 +1367,63 @@ async function generateIntoThread(thread, req) {
     else combinedLog = `[${new Date().toLocaleTimeString()}] ❌ ${version.errorMsg}\n${'─'.repeat(40)}\n`;
     debugEl.textContent = combinedLog;
   } finally {
-    clearTimeout(timer); activeAbortCtrl = null; userAborted = false;
+    clearTimeout(timer);
+    activeAbortCtrl = null;
+    userAborted = false;
     setGenBusy(false);
     updateThreadToolbar(thread);
     chatEl.scrollTo({ top: chatEl.scrollHeight, behavior: 'smooth' });
   }
 }
 
+async function addHistoryEntry(version, threadReq) {
+  const entry = {
+    id: version.id,
+    timestamp: Date.now(),
+    prompt: threadReq.prompt,
+    mode: threadReq.mode,
+    model: threadReq.model,
+    status: version.status,
+    size: threadReq.size || '',
+    aspect: threadReq.aspect || '',
+    quality: threadReq.quality || '',
+    style: threadReq.style || '',
+    reasoning: threadReq.reasoning || '',
+    negative: threadReq.negative || '',
+    n: threadReq.n || 1,
+    hits: version.hits ? version.hits.map(h => ({
+      dataUrl: h.dataUrl || '',
+      url: h.url || '',
+      rawBase64: h.rawBase64 || ''
+    })) : [],
+    textOut: version.textOut || '',
+    errorMsg: version.errorMsg || ''
+  };
+
+  await putHistoryEntry(entry);
+  void renderHistoryDrawer();
+}
+
 async function startNewGeneration() {
-  if (generating) { setStatus(genStatus, '当前已有请求在进行中', 'err'); return; }
+  if (generating) {
+    setStatus(genStatus, '当前已有请求在进行中', 'err');
+    return;
+  }
   const req = readGenerationReq();
-  if (!req.baseurl || !req.key || !req.model || !req.prompt) { setStatus(genStatus, '请填写完整的接口配置与 Prompt', 'err'); return; }
-  if (req.mode === 'edits' && req.files.length === 0) { setStatus(genStatus, '请先上传参考图片', 'err'); return; }
+  if (!req.baseurl || !req.key || !req.model || !req.prompt) {
+    setStatus(genStatus, '请填写完整的接口配置与 Prompt', 'err');
+    return;
+  }
+  if (req.mode === 'edits' && req.files.length === 0) {
+    setStatus(genStatus, '请先上传参考图片', 'err');
+    return;
+  }
 
   if (editingThreadId) {
     const thread = threads.get(editingThreadId);
     if (thread) {
-      thread.req.prompt = req.prompt;
-      thread.req.files = req.files;
-      const userBubble = thread.el.querySelector('.msg-bubble');
-      if (userBubble) {
-        let html = `<div class="whitespace-pre-wrap break-words">${escapeHtml(req.prompt)}</div>`;
-        if (req.mode === 'edits' && req.files.length) html += `<div class="mt-3 text-[11px] opacity-90">参考图：${req.files.length} 张</div>`;
-        userBubble.innerHTML = html;
-      }
+      thread.req = { ...thread.req, ...req, prompt: req.prompt, files: req.files };
+      if (thread.userBubble) thread.userBubble.innerHTML = buildUserBubbleHtml(req);
       const tid = editingThreadId;
       editingThreadId = null;
       await generateIntoThread(thread, thread.req);
@@ -1014,10 +1437,17 @@ async function startNewGeneration() {
 }
 
 async function regenerateThread(threadId) {
-  if (generating) { setStatus(genStatus, '当前已有请求在进行中', 'err'); return; }
-  const thread = threads.get(threadId); if (!thread) return;
+  if (generating) {
+    setStatus(genStatus, '当前已有请求在进行中', 'err');
+    return;
+  }
+  const thread = threads.get(threadId);
+  if (!thread) return;
   const req = thread.req;
-  if (!req) { setStatus(genStatus, '找不到可重新生成的请求', 'err'); return; }
+  if (!req) {
+    setStatus(genStatus, '找不到可重新生成的请求', 'err');
+    return;
+  }
   await generateIntoThread(thread, req);
 }
 
@@ -1026,35 +1456,54 @@ function addFiles(fileList) {
   let added = 0;
   for (const f of fileList) {
     if (!f.type || !f.type.startsWith('image/')) continue;
-    if (imageFiles.length >= 9) { setStatus(genStatus, '最多支持 9 张参考图', 'err'); break; }
+    if (imageFiles.length >= 9) {
+      setStatus(genStatus, '最多支持 9 张参考图', 'err');
+      break;
+    }
     const url = URL.createObjectURL(f);
-    imageFiles.push({ id: nextId++, file: f, url }); added++;
+    imageFiles.push({ id: nextId++, file: f, url });
+    added++;
   }
-  if (added > 0) { renderImages(); setStatus(genStatus, `已添加 ${added} 张图片`, 'ok'); setTimeout(() => setStatus(genStatus, ''), 2000); }
+  if (added > 0) {
+    renderImages();
+    setStatus(genStatus, `已添加 ${added} 张图片`, 'ok');
+    setTimeout(() => setStatus(genStatus, ''), 2000);
+  }
 }
 
 function removeImage(id) {
   const idx = imageFiles.findIndex(x => x.id === id);
   if (idx === -1) return;
-  URL.revokeObjectURL(imageFiles[idx].url); imageFiles.splice(idx, 1); renderImages();
+  URL.revokeObjectURL(imageFiles[idx].url);
+  imageFiles.splice(idx, 1);
+  renderImages();
 }
 
 function renderImages() {
   if (imageFiles.length === 0) {
-    emptyState.classList.remove('hidden'); activeArea.classList.add('hidden');
-    galleryEl.classList.add('hidden'); galleryEl.innerHTML = '';
+    emptyState.classList.remove('hidden');
+    activeArea.classList.add('hidden');
+    galleryEl.classList.add('hidden');
+    galleryEl.innerHTML = '';
     inputImg.removeAttribute('src');
-    updateModeUI(); return;
+    updateModeUI();
+    return;
   }
-  emptyState.classList.add('hidden'); galleryEl.classList.remove('hidden');
+
+  emptyState.classList.add('hidden');
+  galleryEl.classList.remove('hidden');
   galleryEl.innerHTML = '';
+
   imageFiles.forEach(img => {
     const div = document.createElement('div');
     div.className = 'relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 aspect-square';
     div.innerHTML = `<img src="${img.url}" class="w-full h-full object-cover pointer-events-none select-none" draggable="false" />
       <button type="button" class="delete-img-btn absolute top-1.5 right-1.5 w-6 h-6 bg-white/90 dark:bg-slate-700/90 hover:bg-rose-50 dark:hover:bg-rose-900/60 text-slate-500 dark:text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 rounded-full flex items-center justify-center shadow-sm border border-slate-200 dark:border-slate-600 opacity-0 group-hover:opacity-100" data-id="${img.id}" title="移除">&times;</button>
       <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent text-white text-[10px] truncate px-2 py-1.5">${escapeHtml(img.file.name || 'image')}</div>`;
-    div.querySelector('.delete-img-btn').addEventListener('click', e => { e.stopPropagation(); removeImage(img.id); });
+    div.querySelector('.delete-img-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      removeImage(img.id);
+    });
     galleryEl.appendChild(div);
   });
 
@@ -1062,9 +1511,13 @@ function renderImages() {
     const addCard = document.createElement('div');
     addCard.className = 'rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 aspect-square flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-brand-400 dark:hover:border-brand-500 hover:bg-brand-50/50 dark:hover:bg-brand-900/20 transition-colors';
     addCard.innerHTML = `<svg class="w-8 h-8 text-slate-300 dark:text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg><span class="text-[10px] text-slate-400 dark:text-slate-500">添加图片</span>`;
-    addCard.addEventListener('click', e => { e.stopPropagation(); fileInput.click(); });
+    addCard.addEventListener('click', e => {
+      e.stopPropagation();
+      fileInput.click();
+    });
     galleryEl.appendChild(addCard);
   }
+
   if (imageFiles.length === 1) {
     activeArea.classList.remove('hidden');
     inputImg.src = imageFiles[0].url;
@@ -1076,8 +1529,12 @@ function renderImages() {
 
 /* ---------- Send / Stop button ---------- */
 $('gen-clear').addEventListener('click', () => {
-  chatEl.innerHTML = ''; threads.clear(); lastThreadId = null; editingThreadId = null;
-  setStatus(genStatus, ''); setGenBusy(false);
+  chatEl.innerHTML = '';
+  threads.clear();
+  lastThreadId = null;
+  editingThreadId = null;
+  setStatus(genStatus, '');
+  setGenBusy(false);
 });
 
 sendBtn.addEventListener('click', () => {
@@ -1088,26 +1545,59 @@ sendBtn.addEventListener('click', () => {
       setStatus(genStatus, '正在中断请求...', '');
     }
   } else {
-    startNewGeneration();
+    void startNewGeneration();
   }
 });
 
 promptEl.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startNewGeneration(); }
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    void startNewGeneration();
+  }
 });
 
 /* ---------- Image events ---------- */
-dropZone.addEventListener('click', e => { if (e.target.closest('#img-active-area') || e.target.closest('#img-gallery') || e.target.closest('#img-actions')) return; fileInput.click(); });
-fileInput.addEventListener('change', e => { if (e.target.files && e.target.files.length) { addFiles(e.target.files); fileInput.value = ''; } });
-['dragenter','dragover'].forEach(ev => dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.add('border-brand-500','dark:border-brand-400','bg-brand-50/60','dark:bg-brand-900/30'); }));
-['dragleave','drop'].forEach(ev => dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.remove('border-brand-500','dark:border-brand-400','bg-brand-50/60','dark:bg-brand-900/30'); }));
-dropZone.addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer && e.dataTransfer.files; if (f && f.length) addFiles(f); });
+dropZone.addEventListener('click', e => {
+  if (e.target.closest('#img-active-area') || e.target.closest('#img-gallery') || e.target.closest('#img-actions')) return;
+  fileInput.click();
+});
+fileInput.addEventListener('change', e => {
+  if (e.target.files && e.target.files.length) {
+    addFiles(e.target.files);
+    fileInput.value = '';
+  }
+});
+['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, e => {
+  e.preventDefault();
+  dropZone.classList.add('border-brand-500', 'dark:border-brand-400', 'bg-brand-50/60', 'dark:bg-brand-900/30');
+}));
+['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, e => {
+  e.preventDefault();
+  dropZone.classList.remove('border-brand-500', 'dark:border-brand-400', 'bg-brand-50/60', 'dark:bg-brand-900/30');
+}));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  const f = e.dataTransfer && e.dataTransfer.files;
+  if (f && f.length) addFiles(f);
+});
 
-$('img-remove').addEventListener('click', e => { e.stopPropagation(); imageFiles.forEach(i => URL.revokeObjectURL(i.url)); imageFiles = []; renderImages(); });
+$('img-remove').addEventListener('click', e => {
+  e.stopPropagation();
+  imageFiles.forEach(i => URL.revokeObjectURL(i.url));
+  imageFiles = [];
+  renderImages();
+});
 
 document.addEventListener('paste', e => {
-  const items = e.clipboardData && e.clipboardData.items; if (!items) return;
-  const files = []; for (const item of items) { if (item.type && item.type.startsWith('image/')) { const f = item.getAsFile(); if (f) files.push(f); } }
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  const files = [];
+  for (const item of items) {
+    if (item.type && item.type.startsWith('image/')) {
+      const f = item.getAsFile();
+      if (f) files.push(f);
+    }
+  }
   if (files.length) {
     e.preventDefault();
     if (modeSel.value !== 'edits') {
@@ -1132,7 +1622,7 @@ $('debug-clear').addEventListener('click', () => {
 function openHistoryDrawer() {
   $('history-drawer').classList.add('open');
   $('history-overlay').classList.add('open');
-  renderHistoryDrawer();
+  void renderHistoryDrawer();
 }
 function closeHistoryDrawer() {
   $('history-drawer').classList.remove('open');
@@ -1143,7 +1633,10 @@ $('history-toggle').addEventListener('click', () => {
 });
 $('history-close').addEventListener('click', closeHistoryDrawer);
 $('history-overlay').addEventListener('click', closeHistoryDrawer);
-$('history-clear-all').addEventListener('click', deleteAllHistory);
+$('history-clear-all').addEventListener('click', () => void deleteAllHistory());
+$('history-search').addEventListener('input', () => void renderHistoryDrawer());
+$('history-mode-filter').addEventListener('change', () => void renderHistoryDrawer());
+$('history-status-filter').addEventListener('change', () => void renderHistoryDrawer());
 
 $('detail-close').addEventListener('click', closeDetailModal);
 $('detail-overlay').addEventListener('click', closeDetailModal);
@@ -1158,7 +1651,7 @@ document.addEventListener('keydown', e => {
 /* ---------- Init ---------- */
 setGenBusy(false);
 loadApiProfiles();
-renderHistoryDrawer();
+void renderHistoryDrawer();
 
 window.addEventListener('beforeunload', () => {
   imageFiles.forEach(i => URL.revokeObjectURL(i.url));
