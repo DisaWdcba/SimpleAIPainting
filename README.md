@@ -23,12 +23,7 @@
 
 **模块化版本**（推荐）：
 ```
-open "viewer v2.7.html"
-```
-
-**单文件版本**（自包含）：
-```
-open "viewer v2.6.html"
+open "viewer v2.9.2.html"
 ```
 
 ### Electron 开发
