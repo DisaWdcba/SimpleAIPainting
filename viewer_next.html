@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>米醋画图</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%232563eb'/%3E%3Ctext x='50' y='68' text-anchor='middle' fill='white' font-family='sans-serif' font-size='56' font-weight='700'%3E米%3C/text%3E%3C/svg%3E">
+<script src="./viewer_next.tailwind.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="./viewer_next.css?v=20260524-genlock3">
+</head>
+<body class="min-h-screen relative overflow-x-hidden font-sans">
+
+<div class="bg-pattern"></div>
+<div class="bg-gradient-blob"></div>
+
+<header class="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200/80 shadow-sm">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="logo-mi">米</div>
+      <div class="min-w-0">
+        <h1 class="text-base font-semibold tracking-tight text-slate-800">米醋画图</h1>
+        <p class="text-[11px] text-slate-400 hidden sm:block">AI 绘图客户端 · 多接口档案 · IndexedDB 历史存储</p>
+      </div>
+    </div>
+    <div class="flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200/60 shrink-0">
+      <button class="tab-btn active px-4 sm:px-5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 text-slate-500 hover:text-slate-700" data-tab="decode">Base64 解析</button>
+      <button class="tab-btn px-4 sm:px-5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 text-slate-500 hover:text-slate-700" data-tab="generate">API 生成</button>
+      <button class="tab-btn px-4 sm:px-5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 text-slate-500 hover:text-slate-700" data-tab="settings">设置</button>
+      <button class="tab-btn px-4 sm:px-5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 text-slate-500 hover:text-slate-700" data-tab="history">历史记录</button>
+    </div>
+  </div>
+</header>
+
+<main id="app-main" class="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+  <section class="panel active" id="tab-decode">
+    <div class="max-w-4xl mx-auto">
+      <div class="bg-white rounded-3xl p-5 sm:p-8 shadow-float ring-1 ring-slate-900/5">
+        <div class="mb-6">
+          <label class="flex items-center text-sm font-semibold text-slate-800 mb-3">
+            <svg class="w-4 h-4 mr-2 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            粘贴 Base64 编码 或 Data URL
+          </label>
+          <textarea id="b64-input"
+            class="w-full bg-slate-50 hover:bg-slate-50/80 border-2 border-dashed border-slate-200 hover:border-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 focus:bg-white rounded-2xl px-5 py-4 font-mono text-[13px] text-slate-700 leading-relaxed resize-y min-h-[180px] shadow-inner placeholder:text-slate-400 transition-all outline-none"
+            placeholder="data:image/png;base64,iVBORw0KGgo...&#10;&#10;支持自动过滤空格、换行以及重复的 data 前缀。"></textarea>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <button id="b64-decode" type="button" class="primary-action-btn text-sm font-medium py-2.5 px-6 rounded-xl flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+            解析并预览
+          </button>
+          <button id="b64-clear" class="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 text-sm font-medium py-2.5 px-6 rounded-xl shadow-sm transition-all active:scale-95">清空内容</button>
+          <span id="b64-status" class="text-sm font-medium w-full sm:w-auto mt-2 sm:mt-0 px-1"></span>
+        </div>
+
+        <div id="b64-preview" class="mt-8 hidden animate-fade-in border-t border-slate-100 pt-6 sm:pt-8">
+          <h3 class="text-sm font-semibold text-slate-800 mb-4">解析结果</h3>
+          <div class="flex flex-col lg:flex-row gap-6">
+            <div class="flex-shrink-0 lg:w-2/3 bg-slate-50 p-2 rounded-2xl border border-slate-200 inline-flex items-center justify-center min-h-[200px]">
+              <img id="b64-img" alt="" class="max-w-full h-auto rounded-xl shadow-sm checkerboard object-contain max-h-[500px]">
+            </div>
+            <div class="flex-1 flex flex-col gap-4">
+              <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-3">图像元数据</p>
+                <div id="b64-meta" class="space-y-2"></div>
+              </div>
+              <div class="flex flex-col gap-2">
+                <a id="b64-download" download="image.png" class="cursor-pointer flex items-center justify-center bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-sm font-medium py-2.5 px-4 rounded-xl shadow-sm transition-all active:scale-95">
+                  <svg class="w-4 h-4 mr-2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>下载图片
+                </a>
+                <button id="b64-open" class="flex items-center justify-center bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-sm font-medium py-2.5 px-4 rounded-xl shadow-sm transition-all active:scale-95">
+                  <svg class="w-4 h-4 mr-2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>新标签页打开
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="tab-settings">
+    <div class="max-w-6xl mx-auto space-y-6">
+      <div class="flex justify-end">
+        <button id="settings-open-generate" type="button" class="text-xs font-medium text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">返回工作台</button>
+      </div>
+
+      <div id="settings-grid" class="space-y-6">
+        <div id="left-config-panel" class="space-y-6">
+        <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-float ring-1 ring-slate-900/5">
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-sm sm:text-base font-semibold text-slate-800 flex items-center">
+              <svg class="w-5 h-5 mr-2 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+              接口配置
+            </h2>
+          </div>
+
+          <div class="space-y-5">
+            <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+              <div class="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <div class="text-xs font-bold text-slate-500 uppercase tracking-wider">接口档案</div>
+                  <div class="text-[11px] text-slate-400 mt-1">保存多套站点配置并一键切换</div>
+                </div>
+                <button id="cfg-profile-save" type="button" class="text-[11px] font-semibold text-brand-600 hover:text-brand-700 bg-white border border-brand-100 hover:bg-brand-50 px-2.5 py-1.5 rounded-lg transition-colors">保存到档案</button>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto] gap-2">
+                <select id="cfg-profile-select" class="w-full py-2.5 px-3 text-sm text-slate-800 bg-white border border-slate-200 rounded-xl outline-none cursor-pointer">
+                  <option value="">默认配置</option>
+                </select>
+                <button id="cfg-profile-new" type="button" class="px-3 py-2.5 text-sm rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 whitespace-nowrap">新建</button>
+                <button id="cfg-profile-delete" type="button" class="px-3 py-2.5 text-sm rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 whitespace-nowrap">删除</button>
+              </div>
+              <input id="cfg-profile-name" type="text" class="mt-2 w-full py-2.5 px-3 text-sm text-slate-800 bg-white border border-slate-200 rounded-xl outline-none" placeholder="档案名称，例如：官方 / 中转 / 本地代理">
+              <div id="cfg-profile-status" class="text-[11px] mt-2 pl-0.5 empty:hidden"></div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+              <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">连接与模型</div>
+              <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div class="group">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 pl-0.5">Base URL</label>
+                  <div class="flex items-center w-full bg-slate-50 hover:bg-slate-50/80 border border-slate-200 hover:border-slate-300 focus-within:!bg-white focus-within:!border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15 rounded-xl transition-all shadow-sm overflow-hidden">
+                    <div class="pl-3.5 pr-2 flex-shrink-0 text-slate-400 group-focus-within:text-brand-500 transition-colors">
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                    </div>
+                    <input type="text" id="cfg-baseurl" value="https://www.openclaudecode.cn" placeholder="https://..." class="w-full py-2.5 pr-4 text-sm text-slate-800 bg-transparent outline-none min-w-0">
+                  </div>
+                </div>
+                <div class="group">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 pl-0.5">API Key</label>
+                  <div class="flex items-center w-full bg-slate-50 hover:bg-slate-50/80 border border-slate-200 hover:border-slate-300 focus-within:!bg-white focus-within:!border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15 rounded-xl transition-all shadow-sm overflow-hidden">
+                    <div class="pl-3.5 pr-2 flex-shrink-0 text-slate-400 group-focus-within:text-brand-500 transition-colors">
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+                    </div>
+                    <input type="password" id="cfg-key" placeholder="sk-..." class="w-full py-2.5 pr-2 text-sm font-mono text-slate-800 bg-transparent outline-none min-w-0 tracking-wider">
+                    <button id="cfg-key-toggle" type="button" title="显示 / 隐藏 API Key" class="px-3 flex-shrink-0 text-slate-400 hover:text-brand-600 transition-colors">
+                      <svg id="cfg-key-eye-show" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                      <svg id="cfg-key-eye-hide" class="w-4 h-4 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="group">
+                  <div class="flex items-center justify-between mb-1.5 pl-0.5">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Model</label>
+                    <button id="cfg-model-fetch" type="button" class="text-[10px] font-semibold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-2 py-0.5 rounded transition-colors flex items-center gap-1">
+                      <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                      获取模型列表
+                    </button>
+                  </div>
+                  <select id="cfg-model-preset" class="w-full py-2.5 px-3 text-sm font-mono text-slate-800 bg-slate-50 hover:bg-slate-50/80 border border-slate-200 hover:border-slate-300 rounded-xl outline-none cursor-pointer">
+                    <option value="gpt-image-2">gpt-image-2</option>
+                    <option value="gpt-image-2-pro">gpt-image-2-pro</option>
+                    <option value="__custom__">自定义…</option>
+                  </select>
+                  <input type="text" id="cfg-model" value="gpt-image-2"
+                    class="mt-2 hidden w-full py-2.5 px-3 text-sm font-mono text-slate-800 bg-white border border-slate-200 rounded-xl outline-none"
+                    placeholder="也可以直接手动输入模型名">
+                  <div id="cfg-model-fetch-status" class="text-[11px] mt-1 pl-0.5 empty:hidden"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+              <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">生成参数</div>
+              <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div class="group">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 pl-0.5">Endpoint 模式</label>
+                  <div class="flex items-center w-full relative bg-slate-50 hover:bg-slate-50/80 border border-slate-200 hover:border-slate-300 focus-within:!bg-white focus-within:!border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15 rounded-xl transition-all shadow-sm overflow-hidden">
+                    <div class="pl-3.5 pr-2 flex-shrink-0 text-slate-400 group-focus-within:text-brand-500 transition-colors z-10 pointer-events-none">
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <select id="cfg-mode" class="w-full py-2.5 pr-8 text-sm text-slate-800 bg-transparent outline-none appearance-none cursor-pointer truncate min-w-0 z-0">
+                      <option value="responses">Responses · /v1/responses</option>
+                      <option value="images">文生图 · /v1/images/generations</option>
+                      <option value="edits">图生图 · /v1/images/edits</option>
+                      <option value="chat">对话 · /v1/chat/completions</option>
+                    </select>
+                    <div class="absolute right-0 pr-3 flex items-center pointer-events-none text-slate-400 z-10">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path></svg>
+                    </div>
+                  </div>
+                </div>
+                <div class="group">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 pl-0.5">N (张数)</label>
+                  <div class="flex items-center w-full bg-slate-50 hover:bg-slate-50/80 border border-slate-200 hover:border-slate-300 focus-within:!bg-white focus-within:!border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/15 rounded-xl transition-all shadow-sm overflow-hidden">
+                    <div class="pl-3 pr-2 flex-shrink-0 text-slate-400 group-focus-within:text-brand-500 transition-colors">
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h10M4 12h16M4 17h16M16 7l4 4-4 4"/></svg>
+                    </div>
+                    <input type="number" id="cfg-n" value="1" min="1" class="w-full py-2.5 pr-3 text-sm font-mono text-slate-800 bg-transparent outline-none min-w-0">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div class="group">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 pl-0.5">Size</label>
+                <select id="cfg-size-preset" class="w-full py-2.5 px-3 text-sm font-mono text-slate-800 bg-slate-50 hover:bg-slate-50/80 border border-slate-200 hover:border-slate-300 rounded-xl outline-none cursor-pointer">
+                  <optgroup label="1K">
+                    <option value="1024x1024">1024×1024 · 1:1</option>
+                    <option value="1280x720">1280×720 · 16:9</option>
+                    <option value="720x1280">720×1280 · 9:16</option>
+                    <option value="1024x1536">1024×1536 · 2:3</option>
+                    <option value="1536x1024">1536×1024 · 3:2</option>
+                  </optgroup>
+                  <optgroup label="2K">
+                    <option value="1920x1080">1920×1080 · 16:9</option>
+                    <option value="1080x1920">1080×1920 · 9:16</option>
+                    <option value="2048x2048">2048×2048 · 1:1</option>
+                  </optgroup>
+                  <optgroup label="4K">
+                    <option value="3840x2160">3840×2160 · 16:9</option>
+                    <option value="2160x3840">2160×3840 · 9:16</option>
+                  </optgroup>
+                  <option value="auto">auto</option>
+                  <option value="__custom__">自定义…</option>
+                </select>
+                <input type="text" id="cfg-size" value="1024x1024"
+                  class="mt-2 hidden w-full py-2.5 px-3 text-sm font-mono text-slate-800 bg-white border border-slate-200 rounded-xl outline-none"
+                  placeholder="例如：1792x1024 / 1536x1536 / auto">
+              </div>
+              <div class="group">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 pl-0.5">Quality</label>
+                <select id="cfg-quality" class="w-full py-2.5 px-3 text-sm font-mono text-slate-800 bg-slate-50 hover:bg-slate-50/80 border border-slate-200 hover:border-slate-300 rounded-xl outline-none cursor-pointer">
+                  <option value="auto">auto</option>
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                </select>
+              </div>
+              <div class="group">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 pl-0.5">Format</label>
+                <select id="cfg-format" class="w-full py-2.5 px-3 text-sm font-mono text-slate-800 bg-slate-50 hover:bg-slate-50/80 border border-slate-200 hover:border-slate-300 rounded-xl outline-none cursor-pointer">
+                  <option value="png">png</option>
+                  <option value="jpeg">jpeg</option>
+                  <option value="webp">webp</option>
+                </select>
+                <div id="compression-row" class="group hidden mt-4">
+                  <label class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 pl-0.5 flex items-center justify-between">
+                    <span>Output Compression</span>
+                    <span id="compression-label" class="font-mono text-brand-600 normal-case">80</span>
+                  </label>
+                  <input type="range" id="cfg-compression" min="0" max="100" value="80" class="w-full accent-brand-500 cursor-pointer">
+                </div>
+              </div>
+              <div class="group">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 pl-0.5">Background</label>
+                <select id="cfg-background" class="w-full py-2.5 px-3 text-sm font-mono text-slate-800 bg-slate-50 hover:bg-slate-50/80 border border-slate-200 hover:border-slate-300 rounded-xl outline-none cursor-pointer">
+                  <option value="auto">auto</option>
+                  <option value="transparent">transparent</option>
+                  <option value="opaque">opaque</option>
+                </select>
+              </div>
+              <div class="group">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 pl-0.5">Moderation</label>
+                <select id="cfg-moderation" class="w-full py-2.5 px-3 text-sm font-mono text-slate-800 bg-slate-50 hover:bg-slate-50/80 border border-slate-200 hover:border-slate-300 rounded-xl outline-none cursor-pointer">
+                  <option value="auto">auto</option>
+                  <option value="low">low</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)] gap-4">
+              <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label class="flex items-start gap-2.5 cursor-pointer">
+                    <input type="checkbox" id="cfg-clear-on-submit" class="mt-0.5 w-4 h-4 accent-brand-600 cursor-pointer">
+                    <span class="text-xs leading-relaxed text-slate-600">提交任务后清空 Prompt 和参考图</span>
+                  </label>
+                  <label class="flex items-start gap-2.5 cursor-pointer">
+                    <input type="checkbox" id="cfg-persist-prompt" checked class="mt-0.5 w-4 h-4 accent-brand-600 cursor-pointer">
+                    <span class="text-xs leading-relaxed text-slate-600">重启后加载上次 Prompt</span>
+                  </label>
+                </div>
+                <div class="mt-3">
+                  <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 pl-0.5">请求超时（秒）</label>
+                  <input type="number" id="cfg-timeout" value="600" min="10" max="3600" class="w-full py-2.5 px-3 text-sm font-mono text-slate-800 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15">
+                </div>
+              </div>
+              <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
+                  <div>
+                    <div class="text-xs font-bold text-slate-500 uppercase tracking-wider">联通检测</div>
+                    <div class="text-[11px] text-slate-400 mt-1">检测当前站点与绘图相关接口是否可达</div>
+                  </div>
+                  <button id="cfg-health-check" type="button" class="text-xs font-medium text-brand-600 hover:text-brand-700 bg-white border border-brand-100 hover:bg-brand-50 px-3 py-1.5 rounded-lg transition-colors">开始检测</button>
+                </div>
+                <div id="cfg-health-summary" class="text-[11px] text-slate-500 mb-2 empty:hidden"></div>
+                <div id="cfg-health-list" class="space-y-2"></div>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">状态</div>
+                <div id="cfg-status" class="text-xs font-medium min-h-[1rem] text-right empty:hidden"></div>
+              </div>
+            </div>
+        </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="tab-generate">
+    <div class="max-w-6xl mx-auto">
+      <div id="gen-grid" class="grid grid-cols-1 gap-6 sm:gap-8 min-h-0">
+        <div id="right-workbench-panel" class="flex flex-col space-y-6 min-h-0">
+        <div id="edits-card" class="hidden">
+          <input type="file" id="img-file" accept="image/*" multiple class="hidden">
+        </div>
+        <div id="workbench-shell" class="flex flex-col min-h-[72vh] sm:min-h-[78vh] relative overflow-hidden min-h-0">
+          <div class="px-2 sm:px-3 py-3 flex justify-between items-center shrink-0">
+            <h2 class="text-sm font-semibold text-slate-700 flex items-center">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2 shadow-sm shadow-emerald-500/50"></span>
+              工作台 <span id="history-tag" class="ml-2 text-[10px] font-medium text-slate-400 empty:hidden"></span>
+            </h2>
+            <div class="flex items-center gap-2">
+              <button id="cfg-toggle" class="text-xs font-medium text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-2 py-1.5 rounded border border-brand-100 transition-colors">打开设置</button>
+              <button id="gen-clear" class="text-xs font-medium text-slate-500 hover:text-rose-500 transition-colors flex items-center gap-1 bg-white hover:bg-rose-50 px-2 py-1.5 rounded border border-slate-200">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                清空当前会话
+              </button>
+            </div>
+          </div>
+          <div class="flex-1 min-h-0 overflow-y-auto px-2 sm:px-3 pt-2 pb-3 scroll-smooth flex flex-col" id="chat"></div>
+          <div class="pt-1 pb-0 z-10 shrink-0 relative">
+            <div class="relative flex flex-col gap-2 max-w-4xl mx-auto bg-slate-50/96 border border-slate-200 rounded-[2rem] p-1.5 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/10 focus-within:bg-white transition-all shadow-[0_18px_40px_-24px_rgba(15,23,42,0.28)]">
+              <div id="composer-attachments" class="hidden px-3 pt-3 pb-1">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">参考图像 <span id="attach-count" class="ml-1 text-[10px] font-mono text-brand-600"></span></div>
+                  <button id="attach-clear" type="button" class="text-[10px] text-slate-400 hover:text-rose-500 font-medium uppercase tracking-wider">清空</button>
+                </div>
+                <div id="img-grid" class="hidden grid grid-cols-3 sm:grid-cols-4 gap-2"></div>
+                <label id="batch-toggle" class="hidden mt-3 flex items-start gap-2.5 p-3 rounded-xl bg-amber-50/60 ring-1 ring-amber-200/60 cursor-pointer select-none hover:bg-amber-50 transition-colors">
+                  <input type="checkbox" id="cfg-batch-mode" class="mt-0.5 w-4 h-4 accent-amber-600 cursor-pointer">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-[12px] font-semibold text-amber-900 flex items-center gap-1.5">
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7l9-4 9 4M3 7v10l9 4 9-4V7M3 7l9 4m9-4l-9 4m0 0v10"></path></svg>
+                      批处理模式 · 每张图独立请求
+                    </div>
+                    <div class="text-[11px] text-amber-800/80 mt-0.5 leading-relaxed">
+                      启用后：<strong id="batch-count-hint">N</strong> 张图 → <strong id="batch-count-hint2">N</strong> 个独立请求 → <strong id="batch-count-hint3">N</strong> 张输出。
+                    </div>
+                  </div>
+                </label>
+              </div>
+              <textarea id="gen-prompt" rows="2"
+                class="w-full bg-transparent border-none px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-0 resize-none leading-relaxed placeholder:text-slate-400 block break-words"
+                placeholder="描述你要生成的画面 · 支持 Ctrl+V 直接粘贴参考图..."></textarea>
+              <div class="flex items-center gap-2 px-2 pb-1 pt-1">
+                <span class="min-w-0 flex-1 truncate text-[10px] sm:text-xs text-slate-400 font-medium px-1">Shift + Enter 换行 · Ctrl+V 粘贴图</span>
+                <div class="flex items-center gap-2 shrink-0">
+                  <div id="img-drop" class="hidden rounded-xl border border-dashed border-slate-200 bg-white/70 hover:border-brand-400 hover:bg-brand-50/30 transition-all cursor-pointer px-3 py-2 text-[11px] text-slate-500">
+                    点击 / 拖入 / 粘贴
+                  </div>
+                  <button id="attach-btn" type="button" title="添加参考图" class="composer-action-btn composer-attach-btn">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                  </button>
+                  <button id="gen-send" type="button" title="发送" class="composer-action-btn composer-send-btn">
+                    <svg class="w-4 h-4 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div id="img-editor" class="hidden max-w-4xl mx-auto mt-3 p-3 rounded-2xl bg-slate-50 ring-1 ring-slate-200">
+              <div class="flex items-center justify-between mb-2">
+                <span id="editor-title" class="text-xs font-semibold text-slate-600">编辑第 1 张</span>
+                <div class="flex items-center gap-2">
+                  <button id="mask-clear" class="text-[11px] font-medium text-slate-500 hover:text-rose-500 transition-colors px-2 py-1 rounded border border-slate-200 hover:border-rose-200 bg-white">清除涂抹</button>
+                  <button id="editor-close" type="button" class="primary-action-btn text-[11px] font-semibold px-3 py-1 rounded">完成</button>
+                </div>
+              </div>
+              <div class="flex items-center justify-center bg-white rounded-xl p-2 ring-1 ring-slate-200">
+                <div class="relative inline-block">
+                  <img id="edit-img" class="max-w-full max-h-[320px] rounded-lg select-none block pointer-events-none" alt="editing" draggable="false">
+                  <canvas id="mask-canvas" class="absolute top-0 left-0 touch-none cursor-crosshair rounded-lg"></canvas>
+                </div>
+              </div>
+              <div class="mt-3 flex flex-wrap items-center gap-2">
+                <div class="flex bg-slate-100 rounded-lg p-0.5">
+                  <button id="tool-brush" data-tool="brush" class="tool-btn px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white text-slate-700 shadow-sm">笔刷</button>
+                  <button id="tool-eraser" data-tool="eraser" class="tool-btn px-2.5 py-1 rounded-md text-[11px] font-semibold text-slate-500">擦除</button>
+                </div>
+                <div class="flex items-center gap-2 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+                  <span class="text-[11px] text-slate-500">粗细</span>
+                  <input type="range" id="brush-size" min="8" max="100" value="32" class="w-20 accent-brand-500">
+                  <span id="brush-size-label" class="text-[11px] font-mono text-slate-600 w-6 text-right">32</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="tab-history">
+    <div class="max-w-6xl mx-auto">
+      <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-float ring-1 ring-slate-900/5">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-4">
+          <div>
+            <h2 class="text-base sm:text-lg font-semibold text-slate-800">历史记录</h2>
+            <p class="text-xs text-slate-500 mt-1">点击任意历史图片，会自动打开 Base64 解析器来查看。</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <input id="history-search" type="text" class="w-full sm:w-72 px-3 py-2 text-sm border border-slate-200 rounded-xl bg-slate-50 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10" placeholder="搜索 prompt / model / error">
+            <button id="history-refresh" class="px-3 py-2 text-sm rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600">刷新</button>
+            <button id="history-clear" class="px-3 py-2 text-sm rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600">清空历史</button>
+          </div>
+        </div>
+        <div id="history-summary" class="text-xs text-slate-500 mb-4"></div>
+        <div id="history-list" class="grid grid-cols-1 xl:grid-cols-2 gap-4"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="./viewer_next.js?v=20260524-genlock3"></script>
+</body>
+</html>
