@@ -170,6 +170,7 @@ const STORE_META = 'meta';
 const DEFAULT_PROFILE_ID = 'default';
 const cfgIds = [
   'cfg-baseurl','cfg-key','cfg-model-preset','cfg-model','cfg-mode','cfg-size-preset','cfg-size','cfg-n','cfg-batch-mode',
+  'cfg-grok-resolution','cfg-grok-aspect-preset','cfg-grok-aspect',
   'cfg-quality','cfg-format','cfg-background','cfg-moderation','cfg-compression','cfg-clear-on-submit','cfg-persist-prompt','cfg-timeout'
 ];
 const LAST_PROMPT_KEY = 'imggen-last-prompt-v1';
@@ -374,9 +375,11 @@ async function switchProfile(profileId) {
   await idbPut(STORE_META, { key: 'activeProfileId', value: target.id });
   modelSync.syncFromInput();
   sizeSync.syncFromInput();
+  grokAspectSync.syncFromInput();
   document.getElementById('cfg-baseurl').dispatchEvent(new Event('input'));
   document.getElementById('cfg-model').dispatchEvent(new Event('input'));
   document.getElementById('cfg-size').dispatchEvent(new Event('input'));
+  document.getElementById('cfg-grok-aspect').dispatchEvent(new Event('input'));
   document.getElementById('cfg-mode').dispatchEvent(new Event('change'));
   renderProfileOptions();
   setStatus(profileStatusEl, `已切换到档案：${target.name}`, 'ok');
@@ -503,6 +506,14 @@ function wireSelectInput(selectId, inputId) {
 }
 const modelSync = wireSelectInput('cfg-model-preset', 'cfg-model');
 const sizeSync = wireSelectInput('cfg-size-preset', 'cfg-size');
+const grokAspectSync = wireSelectInput('cfg-grok-aspect-preset', 'cfg-grok-aspect');
+
+function syncGrokImageControls() {
+  const useGrok = isGrokImageModel(document.getElementById('cfg-model')?.value || '');
+  document.getElementById('size-group')?.classList.toggle('hidden', useGrok);
+  document.getElementById('grok-resolution-group')?.classList.toggle('hidden', !useGrok);
+  document.getElementById('grok-aspect-group')?.classList.toggle('hidden', !useGrok);
+}
 
 /* -------------------- model fetch -------------------- */
 function extractModelIds(json) {
@@ -684,6 +695,20 @@ function isMicuApi(baseurl) {
 function isGptImage2Family(model) {
   return /^gpt-image-2(-pro)?$/i.test((model || '').trim());
 }
+function isGrokImageModel(model) {
+  const id = (model || '').trim().toLowerCase();
+  if (!id.includes('grok')) return false;
+  if (!/(?:^|[/_.:-])(?:image|imagine)(?:$|[/_.:-])|(?:image|imagine)/i.test(id)) return false;
+  return !/(?:vision|audio|speech|tts|transcri|embed|rerank|moderation)/i.test(id);
+}
+function getGrokImageParams() {
+  const resolution = (document.getElementById('cfg-grok-resolution')?.value || 'auto').trim();
+  const aspect = (document.getElementById('cfg-grok-aspect')?.value || 'auto').trim();
+  const out = {};
+  if (resolution && resolution !== 'auto') out.resolution = resolution;
+  if (aspect && aspect !== 'auto') out.aspect_ratio = aspect;
+  return out;
+}
 (() => {
   const baseurlEl = document.getElementById('cfg-baseurl');
   const sizePreset = document.getElementById('cfg-size-preset');
@@ -725,6 +750,7 @@ function isGptImage2Family(model) {
 
   const lockProGate = () => {
     unlockAll();
+    syncGrokImageControls();
     if (!isMicuApi(baseurlEl.value.trim())) return;
     if (!isGptImage2Family(modelInput.value)) return;
 
@@ -790,8 +816,8 @@ function isGptImage2Family(model) {
   sizePreset.addEventListener('change', () => { lockProGate(); lockN(); lockSizeForMode(); });
   sizeInput.addEventListener('input', () => { lockProGate(); lockN(); lockSizeForMode(); });
   modeSel.addEventListener('change', () => { lockProGate(); lockN(); lockSizeForMode(); updateModeUI(); });
-  modelPreset.addEventListener('change', () => { lockProGate(); lockN(); });
-  modelInput.addEventListener('input', () => { lockProGate(); lockN(); });
+  modelPreset.addEventListener('change', () => { lockProGate(); lockN(); syncGrokImageControls(); });
+  modelInput.addEventListener('input', () => { lockProGate(); lockN(); syncGrokImageControls(); });
   nInput.addEventListener('input', () => {
     if (!isMicuApi(baseurlEl.value.trim()) || !isGptImage2Family(modelInput.value)) return;
     const t = tier();
@@ -804,6 +830,7 @@ function isGptImage2Family(model) {
   lockProGate();
   lockN();
   lockSizeForMode();
+  syncGrokImageControls();
 })();
 
 const cfgToggleBtn = document.getElementById('cfg-toggle');
@@ -825,32 +852,65 @@ const editsCard = document.getElementById('edits-card');
 const dropZone = document.getElementById('img-drop');
 const fileInput = document.getElementById('img-file');
 const imgGrid = document.getElementById('img-grid');
-const imgEditor = document.getElementById('img-editor');
-const editImg = document.getElementById('edit-img');
-const maskCanvas = document.getElementById('mask-canvas');
-const editorTitle = document.getElementById('editor-title');
-const brushSizeInput = document.getElementById('brush-size');
-const brushSizeLabel = document.getElementById('brush-size-label');
 const promptEl = document.getElementById('gen-prompt');
 const chatEl = document.getElementById('chat');
+const genStatusEl = document.getElementById('gen-status');
 const composerAttachments = document.getElementById('composer-attachments');
 const attachCountEl = document.getElementById('attach-count');
 const attachBtn = document.getElementById('attach-btn');
 const attachClearBtn = document.getElementById('attach-clear');
+const previewModal = document.getElementById('img-preview-modal');
+const previewBackdrop = document.getElementById('img-preview-backdrop');
+const previewCloseBtn = document.getElementById('img-preview-close');
+const previewOpenBtn = document.getElementById('img-preview-open');
+const previewImg = document.getElementById('img-preview');
+const previewName = document.getElementById('img-preview-name');
+const previewMeta = document.getElementById('img-preview-meta');
 
 const images = [];
-let editingIdx = -1;
-let maskCtx = null;
-let currentTool = 'brush';
-let brushSize = 32;
-let drawing = false;
-let lastPoint = null;
+let previewIdx = -1;
 let dragSrcIdx = null;
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let size = bytes;
+  let idx = 0;
+  while (size >= 1024 && idx < units.length - 1) {
+    size /= 1024;
+    idx++;
+  }
+  return `${size >= 10 || idx === 0 ? Math.round(size) : size.toFixed(1)} ${units[idx]}`;
+}
+function updateImagePreview() {
+  if (previewIdx < 0 || !images[previewIdx] || !previewImg || !previewName || !previewMeta) return;
+  const img = images[previewIdx];
+  previewImg.src = img.objectUrl;
+  previewName.textContent = img.file?.name || `参考图 ${previewIdx + 1}`;
+  const parts = [];
+  if (img.naturalWidth && img.naturalHeight) parts.push(`${img.naturalWidth}×${img.naturalHeight}`);
+  const sizeLabel = formatFileSize(img.file?.size || 0);
+  if (sizeLabel) parts.push(sizeLabel);
+  previewMeta.textContent = parts.join(' · ');
+}
+function openImagePreview(i) {
+  if (!images[i] || !previewModal) return;
+  previewIdx = i;
+  updateImagePreview();
+  previewModal.classList.remove('hidden');
+  document.body.classList.add('overflow-hidden');
+}
+function closeImagePreview() {
+  if (!previewModal) return;
+  previewModal.classList.add('hidden');
+  document.body.classList.remove('overflow-hidden');
+  previewIdx = -1;
+}
 
 function updateModeUI() {
   const m = modeSel.value;
   const showUpload = (m === 'edits' || m === 'responses');
-  editsCard.classList.toggle('hidden', !showUpload && editingIdx < 0);
+  editsCard.classList.toggle('hidden', !showUpload);
   composerAttachments?.classList.toggle('hidden', !showUpload);
   dropZone?.classList.toggle('hidden', !showUpload);
   promptEl.placeholder = showUpload
@@ -860,6 +920,21 @@ function updateModeUI() {
 modeSel.addEventListener('change', updateModeUI);
 updateModeUI();
 
+previewImg?.addEventListener('load', () => {
+  if (previewIdx >= 0) updateImagePreview();
+});
+previewCloseBtn?.addEventListener('click', closeImagePreview);
+previewBackdrop?.addEventListener('click', closeImagePreview);
+previewModal?.addEventListener('click', (e) => {
+  if (e.target === previewModal) closeImagePreview();
+});
+previewOpenBtn?.addEventListener('click', () => {
+  if (previewIdx >= 0 && images[previewIdx]) window.open(images[previewIdx].objectUrl, '_blank', 'noopener');
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && previewModal && !previewModal.classList.contains('hidden')) closeImagePreview();
+});
+
 function syncModeFromImages() {
   if (images.length && modeSel.value === 'images') {
     modeSel.value = 'edits';
@@ -868,14 +943,6 @@ function syncModeFromImages() {
     modeSel.value = 'images';
     modeSel.dispatchEvent(new Event('change'));
   }
-}
-
-function canvasHasStrokes(canvas) {
-  if (!canvas) return false;
-  const ctx = canvas.getContext('2d');
-  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-  for (let i = 3; i < data.length; i += 4) if (data[i] > 0) return true;
-  return false;
 }
 
 const COMPRESS_THRESHOLD_BYTES = 1.5 * 1024 * 1024;
@@ -928,7 +995,7 @@ async function addFiles(fileList) {
   setStatus(null, `处理 ${candidates.length} 张图...`, '');
   const results = await Promise.all(candidates.map(compressIfNeeded));
   for (const { file, originalSize, compressed } of results) {
-    images.push({ file, objectUrl: URL.createObjectURL(file), naturalWidth: 0, naturalHeight: 0, mask: null, originalSize, compressed });
+    images.push({ file, objectUrl: URL.createObjectURL(file), naturalWidth: 0, naturalHeight: 0, originalSize, compressed });
   }
   syncModeFromImages();
   setStatus(null, '', '');
@@ -938,8 +1005,8 @@ function removeImageAt(i) {
   const img = images[i];
   if (img && img.objectUrl) URL.revokeObjectURL(img.objectUrl);
   images.splice(i, 1);
-  if (editingIdx === i) closeEditor();
-  else if (editingIdx > i) editingIdx--;
+  if (previewIdx === i) closeImagePreview();
+  else if (previewIdx > i) previewIdx--;
   syncModeFromImages();
   renderGrid();
 }
@@ -947,9 +1014,10 @@ function moveImage(from, to) {
   if (from === to || from < 0 || to < 0 || from >= images.length || to >= images.length) return;
   const moved = images.splice(from, 1)[0];
   images.splice(to, 0, moved);
-  if (editingIdx === from) editingIdx = to;
-  else if (from < editingIdx && to >= editingIdx) editingIdx--;
-  else if (from > editingIdx && to <= editingIdx) editingIdx++;
+  if (previewIdx === from) previewIdx = to;
+  else if (from < previewIdx && to >= previewIdx) previewIdx--;
+  else if (from > previewIdx && to <= previewIdx) previewIdx++;
+  if (previewIdx >= 0 && !previewModal.classList.contains('hidden')) updateImagePreview();
   renderGrid();
 }
 let batchToggleUserTouched = false;
@@ -977,6 +1045,7 @@ function renderGrid() {
   }
 
   if (!images.length) {
+    closeImagePreview();
     imgGrid.classList.add('hidden');
     if (composerAttachments && (modeSel.value === 'edits' || modeSel.value === 'responses')) {
       composerAttachments.classList.remove('hidden');
@@ -989,6 +1058,7 @@ function renderGrid() {
   images.forEach((img, i) => {
     const tile = document.createElement('div');
     tile.className = 'img-tile relative group rounded-xl overflow-hidden ring-1 ring-slate-200 bg-slate-100 aspect-square cursor-move';
+    tile.title = '点击放大预览，拖拽可调整顺序';
     tile.draggable = true;
     tile.dataset.idx = i;
 
@@ -1010,13 +1080,6 @@ function renderGrid() {
       cz.textContent = `${orig}MB→${now}KB`;
       tile.appendChild(cz);
     }
-    if (canvasHasStrokes(img.mask)) {
-      const masked = document.createElement('div');
-      masked.className = 'absolute top-1.5 right-1.5 bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm pointer-events-none';
-      masked.textContent = '✎';
-      tile.appendChild(masked);
-    }
-
     const overlay = document.createElement('div');
     overlay.className = 'absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/45 opacity-0 group-hover:opacity-100 transition';
 
@@ -1039,12 +1102,6 @@ function renderGrid() {
 
     overlay.appendChild(arrows);
 
-    const editBtn = document.createElement('button');
-    editBtn.className = 'text-[11px] font-semibold text-white bg-brand-600 hover:bg-brand-700 px-2.5 py-1 rounded shadow';
-    editBtn.textContent = canvasHasStrokes(img.mask) ? '改涂抹' : '涂抹';
-    editBtn.addEventListener('click', (e) => { e.stopPropagation(); openEditor(i); });
-    overlay.appendChild(editBtn);
-
     const rmBtn = document.createElement('button');
     rmBtn.className = 'text-[11px] font-semibold text-white bg-rose-600/90 hover:bg-rose-600 px-2.5 py-1 rounded shadow';
     rmBtn.textContent = '移除';
@@ -1053,6 +1110,7 @@ function renderGrid() {
 
     tile.appendChild(overlay);
 
+    tile.addEventListener('click', () => openImagePreview(i));
     tile.addEventListener('dragstart', (e) => {
       dragSrcIdx = i;
       tile.classList.add('dragging');
@@ -1083,56 +1141,6 @@ function renderGrid() {
   });
 }
 
-function openEditor(i) {
-  if (editingIdx >= 0 && editingIdx !== i) persistCurrentMask();
-  editingIdx = i;
-  editorTitle.textContent = '编辑第 ' + (i + 1) + ' 张（可选）';
-  imgEditor.classList.remove('hidden');
-  editsCard.classList.remove('hidden');
-  editImg.onload = () => {
-    images[i].naturalWidth = editImg.naturalWidth;
-    images[i].naturalHeight = editImg.naturalHeight;
-    requestAnimationFrame(() => setupEditorMask(i));
-  };
-  editImg.src = images[i].objectUrl;
-  imgEditor.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-function setupEditorMask(i) {
-  const w = editImg.clientWidth, h = editImg.clientHeight;
-  if (w === 0 || h === 0) { requestAnimationFrame(() => setupEditorMask(i)); return; }
-  maskCanvas.width = w;
-  maskCanvas.height = h;
-  maskCanvas.style.width = w + 'px';
-  maskCanvas.style.height = h + 'px';
-  maskCtx = maskCanvas.getContext('2d');
-  maskCtx.lineCap = 'round';
-  maskCtx.lineJoin = 'round';
-  maskCtx.clearRect(0, 0, w, h);
-  if (images[i].mask) maskCtx.drawImage(images[i].mask, 0, 0, w, h);
-}
-function persistCurrentMask() {
-  if (editingIdx < 0) return;
-  const img = images[editingIdx];
-  if (!img || !img.naturalWidth || !maskCtx) return;
-  const out = document.createElement('canvas');
-  out.width = img.naturalWidth;
-  out.height = img.naturalHeight;
-  out.getContext('2d').drawImage(maskCanvas, 0, 0, out.width, out.height);
-  img.mask = canvasHasStrokes(out) ? out : null;
-}
-function closeEditor() {
-  persistCurrentMask();
-  editingIdx = -1;
-  imgEditor.classList.add('hidden');
-  updateModeUI();
-  renderGrid();
-}
-document.getElementById('editor-close').addEventListener('click', closeEditor);
-document.getElementById('mask-clear').addEventListener('click', () => {
-  if (maskCtx) maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
-  if (editingIdx >= 0 && images[editingIdx]) images[editingIdx].mask = null;
-});
-
 dropZone.addEventListener('click', () => fileInput.click());
 attachBtn?.addEventListener('click', () => {
   if (modeSel.value !== 'edits' && modeSel.value !== 'responses') {
@@ -1142,9 +1150,8 @@ attachBtn?.addEventListener('click', () => {
   fileInput.click();
 });
 function clearAttachedImages() {
+  closeImagePreview();
   images.splice(0).forEach(im => { try { URL.revokeObjectURL(im.objectUrl); } catch {} });
-  editingIdx = -1;
-  imgEditor.classList.add('hidden');
   syncModeFromImages();
   renderGrid();
 }
@@ -1192,65 +1199,6 @@ document.addEventListener('paste', (e) => {
   if (!items) return;
   if (handleImagePaste(items)) e.preventDefault();
 });
-promptEl.addEventListener('paste', (e) => {
-  if (e.defaultPrevented) return;
-  const items = e.clipboardData && e.clipboardData.items;
-  if (!items) return;
-  let hasImage = false;
-  for (const item of items) if (item.type && item.type.startsWith('image/')) { hasImage = true; break; }
-  if (!hasImage) return;
-  if (handleImagePaste(items)) e.preventDefault();
-});
-
-function getPos(e) {
-  const rect = maskCanvas.getBoundingClientRect();
-  const p = e.touches ? e.touches[0] : e;
-  return { x: p.clientX - rect.left, y: p.clientY - rect.top };
-}
-function drawStroke(x, y) {
-  if (!maskCtx) return;
-  maskCtx.globalCompositeOperation = currentTool === 'eraser' ? 'destination-out' : 'source-over';
-  maskCtx.fillStyle = 'rgba(239, 68, 68, 0.55)';
-  maskCtx.beginPath();
-  maskCtx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
-  maskCtx.fill();
-}
-function drawLine(x0, y0, x1, y1) {
-  if (!maskCtx) return;
-  maskCtx.globalCompositeOperation = currentTool === 'eraser' ? 'destination-out' : 'source-over';
-  maskCtx.strokeStyle = 'rgba(239, 68, 68, 0.55)';
-  maskCtx.lineWidth = brushSize;
-  maskCtx.beginPath();
-  maskCtx.moveTo(x0, y0);
-  maskCtx.lineTo(x1, y1);
-  maskCtx.stroke();
-}
-function startDraw(e) { if (!maskCtx) return; e.preventDefault(); drawing = true; lastPoint = getPos(e); drawStroke(lastPoint.x, lastPoint.y); }
-function moveDraw(e) { if (!drawing) return; e.preventDefault(); const p = getPos(e); drawLine(lastPoint.x, lastPoint.y, p.x, p.y); drawStroke(p.x, p.y); lastPoint = p; }
-function endDraw() { drawing = false; lastPoint = null; }
-maskCanvas.addEventListener('mousedown', startDraw);
-window.addEventListener('mousemove', moveDraw);
-window.addEventListener('mouseup', endDraw);
-maskCanvas.addEventListener('touchstart', startDraw, { passive: false });
-maskCanvas.addEventListener('touchmove', moveDraw, { passive: false });
-maskCanvas.addEventListener('touchend', endDraw);
-function setTool(t) {
-  currentTool = t;
-  document.querySelectorAll('.tool-btn').forEach(btn => {
-    const active = btn.dataset.tool === t;
-    btn.classList.toggle('bg-white', active);
-    btn.classList.toggle('text-slate-700', active);
-    btn.classList.toggle('shadow-sm', active);
-    btn.classList.toggle('text-slate-500', !active);
-  });
-}
-document.getElementById('tool-brush').addEventListener('click', () => setTool('brush'));
-document.getElementById('tool-eraser').addEventListener('click', () => setTool('eraser'));
-brushSizeInput.addEventListener('input', (e) => {
-  brushSize = parseInt(e.target.value, 10);
-  brushSizeLabel.textContent = brushSize;
-});
-setTool('brush');
 
 /* -------------------- history records -------------------- */
 function loadHistoryRecords() {
@@ -1640,6 +1588,21 @@ function extractImage(resp) {
   return findImageInText(JSON.stringify(resp));
 }
 
+function extractApiError(resp) {
+  if (typeof resp === 'string') {
+    const s = resp.trim();
+    if (!s) return '';
+    if (/请求包含不适当的内容|inappropriate content|content policy|content_policy|policy violation/i.test(s)) return s;
+    return '';
+  }
+  const err = resp?.error;
+  if (!err) return '';
+  if (typeof err === 'string') return err.trim();
+  if (typeof err.message === 'string' && err.message.trim()) return err.message.trim();
+  if (typeof resp?.message === 'string' && resp.message.trim()) return resp.message.trim();
+  try { return JSON.stringify(err); } catch { return '请求失败'; }
+}
+
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const fr = new FileReader();
@@ -1658,39 +1621,21 @@ function canvasToDataUrl(canvas, type) {
     }, type);
   });
 }
-async function buildMaskedComposite(img) {
-  const htmlImg = await new Promise((res, rej) => {
-    const x = new Image();
-    x.onload = () => res(x);
-    x.onerror = rej;
-    x.src = img.objectUrl;
-  });
-  const out = document.createElement('canvas');
-  out.width = img.naturalWidth || htmlImg.naturalWidth;
-  out.height = img.naturalHeight || htmlImg.naturalHeight;
-  const ctx = out.getContext('2d');
-  ctx.drawImage(htmlImg, 0, 0, out.width, out.height);
-  ctx.drawImage(img.mask, 0, 0, out.width, out.height);
-  return canvasToDataUrl(out);
-}
 function buildHeader(prompt, imgs, sizeSuffix = '') {
-  const anyMasked = imgs.some(im => canvasHasStrokes(im.mask));
   if (!imgs.length) return prompt;
-  if (anyMasked) {
-    return `Attached are ${imgs.length} reference image(s). For any image followed by a red-overlay duplicate, treat the red overlay as instruction only. Modify ONLY the red region; pixels outside must remain unchanged.\n\nInstruction:\n${prompt}${sizeSuffix}`;
-  }
-  return `Attached are ${imgs.length} reference image(s). Use them as visual context. Do not collage unless explicitly requested.\n\nInstruction:\n${prompt}${sizeSuffix}`;
+  return `Attached are ${imgs.length} reference image(s). Use them as visual context. Do not collage unless explicitly requested.
+
+Instruction:
+${prompt}${sizeSuffix}`;
 }
 
 /* -------------------- clear current session -------------------- */
 document.getElementById('gen-clear').addEventListener('click', () => {
   if (!confirm('清空当前会话？（不会删除历史记录）')) return;
   chatEl.innerHTML = '';
-  setStatus(null, '');
+  setStatus(genStatusEl, '');
   promptEl.value = '';
   images.splice(0).forEach(im => { try { URL.revokeObjectURL(im.objectUrl); } catch {} });
-  editingIdx = -1;
-  imgEditor.classList.add('hidden');
   renderGrid();
 });
 
@@ -1829,27 +1774,38 @@ document.getElementById('gen-send').addEventListener('click', async () => {
   const n = parseInt(document.getElementById('cfg-n').value, 10) || 1;
   const prompt = document.getElementById('gen-prompt').value.trim();
   const genOpts = getGenerationOptions();
+  const useGrokImageFormat = isGrokImageModel(model);
   const sizeMatch = /^(\d+)x(\d+)$/i.exec(size);
-  const sizeDirective = sizeMatch
+  const grokAspect = (document.getElementById('cfg-grok-aspect')?.value || 'auto').trim();
+  const grokResolution = (document.getElementById('cfg-grok-resolution')?.value || 'auto').trim();
+  const grokSizeNote = [
+    grokResolution !== 'auto' ? `${grokResolution} resolution` : '',
+    grokAspect !== 'auto' ? `${grokAspect} aspect ratio` : 'the model default aspect ratio',
+  ].filter(Boolean).join(' with ');
+  const sizeDirective = useGrokImageFormat
+    ? `Output the full image at ${grokSizeNote}.`
+    : sizeMatch
     ? `Output the full image at exactly ${sizeMatch[1]}x${sizeMatch[2]} pixels.`
     : 'Output the full image, same dimensions as the input if applicable.';
-  const sizeSuffix = sizeMatch ? ` At exactly ${sizeMatch[1]}x${sizeMatch[2]} pixels.` : '';
+  const sizeSuffix = useGrokImageFormat
+    ? (grokAspect !== 'auto' || grokResolution !== 'auto' ? ` At ${grokSizeNote}.` : '')
+    : sizeMatch ? ` At exactly ${sizeMatch[1]}x${sizeMatch[2]} pixels.` : '';
 
   if (!baseurl || !key || !model || !prompt) {
-    setStatus(null, '请填写完整的接口配置与 Prompt', 'err');
+    setStatus(genStatusEl, '请填写完整的接口配置与 Prompt', 'err');
+    document.getElementById('gen-prompt')?.focus();
     return;
   }
   if (mode === 'edits' && images.length === 0) {
-    setStatus(null, '请先上传至少一张参考图片', 'err');
+    setStatus(genStatusEl, '请先上传至少一张参考图片', 'err');
     return;
   }
 
   if (mode === 'edits' && isMicuApi(baseurl) && isGptImage2Family(model) && !/pro/i.test(model) && sizeMatch && Math.max(+sizeMatch[1], +sizeMatch[2]) >= 1600) {
-    setStatus(null, '当前米醋接口的图生图仅建议 1K，请把 size 改到 ≤1536，或切到文生图 / Responses', 'err');
+    setStatus(genStatusEl, '当前米醋接口的图生图仅建议 1K，请把 size 改到 ≤1536，或切到文生图 / Responses', 'err');
     return;
   }
 
-  if (mode === 'edits' && editingIdx >= 0) persistCurrentMask();
 
   if (genOpts.persistPrompt && prompt) {
     try { localStorage.setItem(LAST_PROMPT_KEY, prompt); } catch {}
@@ -1880,12 +1836,6 @@ document.getElementById('gen-send').addEventListener('click', async () => {
       t.src = im.objectUrl;
       t.className = 'w-16 h-16 object-cover rounded-md ring-1 ring-white/25 block';
       box.appendChild(t);
-      if (canvasHasStrokes(im.mask)) {
-        const dot = document.createElement('span');
-        dot.className = 'absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full ring-2 ring-white';
-        dot.title = '已涂抹';
-        box.appendChild(dot);
-      }
       strip.appendChild(box);
     });
     if (strip.childElementCount) wrap.appendChild(strip);
@@ -1901,11 +1851,10 @@ document.getElementById('gen-send').addEventListener('click', async () => {
   loader.className = 'flex items-center gap-3 text-slate-500 font-medium text-sm py-1';
   loader.innerHTML = `<svg class="animate-spin w-4 h-4 text-brand-500" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> <span class="animate-pulse">正在生成图像...</span>`;
   const botBubble = addMsg('bot', loader);
-  setStatus(null, '请求发送中...', '');
+  setStatus(genStatusEl, '请求发送中...', '');
 
   const jsonHeaders = { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json', 'Accept': 'application/json' };
   const multipartHeaders = { 'Authorization': 'Bearer ' + key, 'Accept': 'application/json' };
-
   const tryEndpoint = async (ep) => {
     let body, headers;
     if (ep.multipart) {
@@ -1929,25 +1878,22 @@ document.getElementById('gen-send').addEventListener('click', async () => {
     }
   };
 
+  const isMissingMultipartImageError = (probe) => {
+    const text = `${probe?.text || ''} ${probe?.r?.statusText || ''}`;
+    return probe?.r?.status === 400 && /image\s+file\s+is\s+required|image.+required/i.test(text);
+  };
+
+  const shouldTryFallback = (probe, fallbackEp) => {
+    if (!fallbackEp || probe?.r?.ok) return false;
+    return [0, 404, 405, 501, 503].includes(probe.r.status) || isMissingMultipartImageError(probe);
+  };
+
   const fileToPngBlob = async (fileOrBlob) => {
     if (!(fileOrBlob instanceof Blob)) throw new Error('不是 Blob');
     if (fileOrBlob.type === 'image/png') return fileOrBlob;
     return new Blob([await fileOrBlob.arrayBuffer()], { type: 'image/png' });
   };
 
-  const buildAlphaMaskBlob = async (im) => {
-    if (!im || !canvasHasStrokes(im.mask)) return null;
-    const w = im.naturalWidth || im.mask.width;
-    const h = im.naturalHeight || im.mask.height;
-    const out = document.createElement('canvas');
-    out.width = w; out.height = h;
-    const ctx = out.getContext('2d');
-    ctx.fillStyle = 'rgb(255,255,255)';
-    ctx.fillRect(0, 0, w, h);
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.drawImage(im.mask, 0, 0, w, h);
-    return await new Promise((resolve) => out.toBlob((b) => resolve(b), 'image/png'));
-  };
 
   const buildEditsForm = async (im, p, sz, useMask, useModel) => {
     const fd = new FormData();
@@ -1957,12 +1903,50 @@ document.getElementById('gen-send').addEventListener('click', async () => {
     fd.append('response_format', 'b64_json');
     applyExtraGenerationParams(fd, true, genOpts);
     fd.append('image', await fileToPngBlob(im.file), im.file.name || 'image.png');
-    if (useMask) {
-      const mb = await buildAlphaMaskBlob(im);
-      if (mb) fd.append('mask', mb, 'mask.png');
+    return fd;
+  };
+
+  const buildGrokImageObject = (url) => ({ type: 'image_url', url });
+
+  const buildGrokGenerationBody = (p, useModel) => {
+    const body = { model: useModel || model, prompt: p, response_format: 'b64_json' };
+    Object.assign(body, getGrokImageParams());
+    return body;
+  };
+
+  const buildGrokEditsBody = async (imgs, p, useModel) => {
+    const body = {
+      model: useModel || model,
+      prompt: buildHeader(p, imgs, sizeSuffix),
+      response_format: 'b64_json',
+    };
+    Object.assign(body, getGrokImageParams());
+    const imageUrls = [];
+    for (const im of imgs) {
+      imageUrls.push(await fileToDataUrl(im.file));
+    }
+    if (imageUrls.length === 1) body.image = buildGrokImageObject(imageUrls[0]);
+    else body.images = imageUrls.map(buildGrokImageObject);
+    return body;
+  };
+
+  const buildGrokEditsForm = async (imgs, p, useModel) => {
+    const fd = new FormData();
+    fd.append('model', useModel || model);
+    fd.append('prompt', buildHeader(p, imgs, sizeSuffix));
+    fd.append('response_format', 'b64_json');
+    const grokParams = getGrokImageParams();
+    for (const [key, value] of Object.entries(grokParams)) fd.append(key, value);
+    for (const im of imgs) {
+      fd.append('image', await fileToPngBlob(im.file), im.file.name || 'image.png');
     }
     return fd;
   };
+
+  const makeGrokEditsEndpoints = async (imgs, p, useModel) => ({
+    primary: { url: baseurl + '/v1/images/edits', body: await buildGrokEditsBody(imgs, p, useModel) },
+    fallback: { url: baseurl + '/v1/images/edits', body: await buildGrokEditsForm(imgs, p, useModel), multipart: true },
+  });
 
   const buildResponsesBody = async () => {
     const tool = { type: 'image_generation' };
@@ -1980,10 +1964,6 @@ document.getElementById('gen-send').addEventListener('click', async () => {
     for (const im of images) {
       const dataUrl = await fileToDataUrl(im.file);
       content.push({ type: 'input_image', image_url: dataUrl });
-      if (canvasHasStrokes(im.mask)) {
-        const maskedUrl = await buildMaskedComposite(im);
-        content.push({ type: 'input_image', image_url: maskedUrl });
-      }
     }
     body.input = [{ role: 'user', content }];
     return body;
@@ -1995,10 +1975,6 @@ document.getElementById('gen-send').addEventListener('click', async () => {
     for (const im of images) {
       const dataUrl = await fileToDataUrl(im.file);
       content.push({ type: 'image_url', image_url: { url: dataUrl } });
-      if (canvasHasStrokes(im.mask)) {
-        const maskedUrl = await buildMaskedComposite(im);
-        content.push({ type: 'image_url', image_url: { url: maskedUrl } });
-      }
     }
     return content;
   };
@@ -2034,17 +2010,13 @@ document.getElementById('gen-send').addEventListener('click', async () => {
 
     const buildSingleEndpoints = async (im, useModel) => {
       const effModel = useModel || model;
-      const masked = canvasHasStrokes(im.mask);
-      const fd = await buildEditsForm(im, prompt, size, masked, effModel);
-      const dataUrl = await fileToDataUrl(im.file);
-      const header = masked
-        ? `You are given two attached images: the FIRST is the original; the SECOND is the same image with a semi-transparent red overlay marking the ONLY region you may modify. Modify ONLY pixels inside the red region. ${sizeDirective}\n\nInstruction:\n${prompt}`
-        : `Edit the attached image as described. ${sizeDirective}\n\nInstruction:\n${prompt}`;
-      const chatContent = [{ type: 'text', text: header }, { type: 'image_url', image_url: { url: dataUrl } }];
-      if (masked) {
-        const maskedUrl = await buildMaskedComposite(im);
-        chatContent.push({ type: 'image_url', image_url: { url: maskedUrl } });
+      if (isGrokImageModel(effModel)) {
+        return await makeGrokEditsEndpoints([im], prompt, effModel);
       }
+      const fd = await buildEditsForm(im, prompt, size, false, effModel);
+      const dataUrl = await fileToDataUrl(im.file);
+      const header = `Edit the attached image as described. ${sizeDirective}\n\nInstruction:\n${prompt}`;
+      const chatContent = [{ type: 'text', text: header }, { type: 'image_url', image_url: { url: dataUrl } }];
       const editsEp = { url: baseurl + '/v1/images/edits', body: fd, multipart: true };
       const chatEp = { url: baseurl + '/v1/chat/completions', body: { model: effModel, messages: [{ role: 'user', content: chatContent }] } };
       const bypass = /pro/i.test(effModel) && !!sizeMatch && Math.max(+sizeMatch[1], +sizeMatch[2]) >= 1600;
@@ -2095,7 +2067,7 @@ document.getElementById('gen-send').addEventListener('click', async () => {
       try {
         const endpoints = await buildSingleEndpoints(im, useModel);
         let probe = await probeWithRetry(endpoints.primary);
-        if (!probe.r.ok && endpoints.fallback && [0, 404, 405, 501, 503].includes(probe.r.status)) {
+        if (shouldTryFallback(probe, endpoints.fallback)) {
           probe = await probeWithRetry(endpoints.fallback);
         }
         if (!probe.r.ok) {
@@ -2113,6 +2085,8 @@ document.getElementById('gen-send').addEventListener('click', async () => {
         }
         let resp;
         try { resp = JSON.parse(probe.text); } catch { resp = probe.text; }
+        const apiError = extractApiError(resp);
+        if (apiError) throw new Error(apiError);
         const hit = extractImage(resp);
         if (!hit) throw new Error('响应中未找到图片');
         cellHits[idx] = hit;
@@ -2180,41 +2154,57 @@ document.getElementById('gen-send').addEventListener('click', async () => {
   let primary = null;
   let fallback = null;
 
-  if (mode === 'responses') {
+  if (mode === 'responses' && useGrokImageFormat) {
+    if (!images.length) {
+      primary = { url: baseurl + '/v1/images/generations', body: buildGrokGenerationBody(prompt) };
+    } else {
+      const endpoints = await makeGrokEditsEndpoints(images, prompt);
+      primary = endpoints.primary;
+      fallback = endpoints.fallback;
+    }
+  } else if (mode === 'responses') {
     const body = await buildResponsesBody();
     primary = { url: baseurl + '/v1/responses', body };
 
     if (!images.length) {
-      const fallbackBody = { model, prompt, n: 1, size, response_format: 'b64_json' };
-      applyExtraGenerationParams(fallbackBody, false, genOpts);
+      const fallbackBody = useGrokImageFormat
+        ? buildGrokGenerationBody(prompt)
+        : { model, prompt, n: 1, size, response_format: 'b64_json' };
+      if (!useGrokImageFormat) applyExtraGenerationParams(fallbackBody, false, genOpts);
       fallback = { url: baseurl + '/v1/images/generations', body: fallbackBody };
     } else if (images.length === 1) {
-      const im = images[0];
-      const masked = canvasHasStrokes(im.mask);
-      const fd = await buildEditsForm(im, prompt, size, masked, model);
-      fallback = { url: baseurl + '/v1/images/edits', body: fd, multipart: true };
+      if (useGrokImageFormat) {
+        fallback = (await makeGrokEditsEndpoints(images, prompt)).fallback;
+      } else {
+        const im = images[0];
+        const fd = await buildEditsForm(im, prompt, size, false, model);
+        fallback = { url: baseurl + '/v1/images/edits', body: fd, multipart: true };
+      }
     } else {
-      const chatContent = await buildChatContent();
-      fallback = { url: baseurl + '/v1/chat/completions', body: { model, messages: [{ role: 'user', content: chatContent }] } };
+      if (useGrokImageFormat) {
+        fallback = (await makeGrokEditsEndpoints(images, prompt)).fallback;
+      } else {
+        const chatContent = await buildChatContent();
+        fallback = { url: baseurl + '/v1/chat/completions', body: { model, messages: [{ role: 'user', content: chatContent }] } };
+      }
     }
   } else if (mode === 'images') {
-    const genBody = { model, prompt, n: 1, size, response_format: 'b64_json' };
-    applyExtraGenerationParams(genBody, false, genOpts);
+    const genBody = useGrokImageFormat
+      ? buildGrokGenerationBody(prompt)
+      : { model, prompt, n: 1, size, response_format: 'b64_json' };
+    if (!useGrokImageFormat) applyExtraGenerationParams(genBody, false, genOpts);
     primary = { url: baseurl + '/v1/images/generations', body: genBody };
   } else if (mode === 'edits') {
-    if (images.length === 1) {
+    if (useGrokImageFormat) {
+      const endpoints = await makeGrokEditsEndpoints(images, prompt);
+      primary = endpoints.primary;
+      fallback = endpoints.fallback;
+    } else if (images.length === 1) {
       const im = images[0];
-      const masked = canvasHasStrokes(im.mask);
-      const fd = await buildEditsForm(im, prompt, size, masked, model);
+      const fd = await buildEditsForm(im, prompt, size, false, model);
       const dataUrl = await fileToDataUrl(im.file);
-      const header = masked
-        ? `You are given two attached images: the FIRST is the original; the SECOND is the same image with a semi-transparent red overlay marking the ONLY region you may modify. Modify ONLY pixels inside the red region. ${sizeDirective}\n\nInstruction:\n${prompt}`
-        : `Edit the attached image as described. ${sizeDirective}\n\nInstruction:\n${prompt}`;
+      const header = `Edit the attached image as described. ${sizeDirective}\n\nInstruction:\n${prompt}`;
       const chatContent = [{ type: 'text', text: header }, { type: 'image_url', image_url: { url: dataUrl } }];
-      if (masked) {
-        const maskedUrl = await buildMaskedComposite(im);
-        chatContent.push({ type: 'image_url', image_url: { url: maskedUrl } });
-      }
       const editsEp = { url: baseurl + '/v1/images/edits', body: fd, multipart: true };
       const chatEp = { url: baseurl + '/v1/chat/completions', body: { model, messages: [{ role: 'user', content: chatContent }] } };
       const bypassEdits = /pro/i.test(model) && !!sizeMatch && Math.max(+sizeMatch[1], +sizeMatch[2]) >= 1600;
@@ -2247,7 +2237,7 @@ document.getElementById('gen-send').addEventListener('click', async () => {
     };
 
     let probe = await probeWithRetry(primary);
-    if (!probe.r.ok && fallback && [0, 404, 405, 501, 503].includes(probe.r.status)) {
+    if (shouldTryFallback(probe, fallback)) {
       usedFallback = true;
       probe = await probeWithRetry(fallback);
     }
@@ -2292,6 +2282,8 @@ document.getElementById('gen-send').addEventListener('click', async () => {
       if (!res.r.ok) continue;
       let resp;
       try { resp = JSON.parse(res.text); } catch { resp = res.text; }
+      const apiError = extractApiError(resp);
+      if (apiError) throw new Error(apiError);
       const hit = extractImage(resp);
       if (hit) hits.push(hit);
       else if (!textFallback) {
@@ -2400,7 +2392,7 @@ document.getElementById('gen-send').addEventListener('click', async () => {
       : '';
     botBubble.innerHTML = `<div class="text-rose-600"><span class="font-bold text-xs uppercase tracking-wider">Error</span><div class="text-[13px] bg-rose-50 border border-rose-100 p-3 rounded-md break-all mt-1">${escapeHtml(e.message)}</div>${hint}</div>`;
     appendRawResponseDetails(botBubble, rawText || String(e));
-    setStatus(null, '请求失败', 'err');
+    setStatus(genStatusEl, '请求失败', 'err');
     await updateHistoryRecord(historyId, { status: 'error', error: e.message, raw: rawText });
   }
 
@@ -2442,6 +2434,9 @@ async function initApp() {
     background: 'cfg-background',
     moderation: 'cfg-moderation',
     compression: 'cfg-compression',
+    resolution: 'cfg-grok-resolution',
+    aspect_ratio: 'cfg-grok-aspect',
+    aspectRatio: 'cfg-grok-aspect',
   };
   Object.entries(aliases).forEach(([param, id]) => {
     if (!params.has(param)) return;
@@ -2455,9 +2450,11 @@ async function initApp() {
 
   modelSync.syncFromInput();
   sizeSync.syncFromInput();
+  grokAspectSync.syncFromInput();
   document.getElementById('cfg-baseurl').dispatchEvent(new Event('input'));
   document.getElementById('cfg-model').dispatchEvent(new Event('input'));
   document.getElementById('cfg-size').dispatchEvent(new Event('input'));
+  document.getElementById('cfg-grok-aspect').dispatchEvent(new Event('input'));
   document.getElementById('cfg-format').dispatchEvent(new Event('change'));
   document.getElementById('cfg-compression').dispatchEvent(new Event('input'));
   document.getElementById('cfg-mode').dispatchEvent(new Event('change'));

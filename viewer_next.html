@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%232563eb'/%3E%3Ctext x='50' y='68' text-anchor='middle' fill='white' font-family='sans-serif' font-size='56' font-weight='700'%3E米%3C/text%3E%3C/svg%3E">
 <script src="./viewer_next.tailwind.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
-<link rel="stylesheet" href="./viewer_next.css?v=20260524-genlock3">
+<link rel="stylesheet" href="./viewer_next.css?v=20260531-grok-edit-fallback">
 </head>
 <body class="min-h-screen relative overflow-x-hidden font-sans">
 
@@ -152,6 +152,8 @@
                   <select id="cfg-model-preset" class="w-full py-2.5 px-3 text-sm font-mono text-slate-800 bg-slate-50 hover:bg-slate-50/80 border border-slate-200 hover:border-slate-300 rounded-xl outline-none cursor-pointer">
                     <option value="gpt-image-2">gpt-image-2</option>
                     <option value="gpt-image-2-pro">gpt-image-2-pro</option>
+                    <option value="grok-imagine-image-quality">grok-imagine-image-quality</option>
+                    <option value="grok-imagine-image-pro">grok-imagine-image-pro</option>
                     <option value="__custom__">自定义…</option>
                   </select>
                   <input type="text" id="cfg-model" value="gpt-image-2"
@@ -195,7 +197,7 @@
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-              <div class="group">
+              <div id="size-group" class="group">
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 pl-0.5">Size</label>
                 <select id="cfg-size-preset" class="w-full py-2.5 px-3 text-sm font-mono text-slate-800 bg-slate-50 hover:bg-slate-50/80 border border-slate-200 hover:border-slate-300 rounded-xl outline-none cursor-pointer">
                   <optgroup label="1K">
@@ -220,6 +222,39 @@
                 <input type="text" id="cfg-size" value="1024x1024"
                   class="mt-2 hidden w-full py-2.5 px-3 text-sm font-mono text-slate-800 bg-white border border-slate-200 rounded-xl outline-none"
                   placeholder="例如：1792x1024 / 1536x1536 / auto">
+              </div>
+              <div id="grok-resolution-group" class="group hidden">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 pl-0.5">Resolution</label>
+                <select id="cfg-grok-resolution" class="w-full py-2.5 px-3 text-sm font-mono text-slate-800 bg-slate-50 hover:bg-slate-50/80 border border-slate-200 hover:border-slate-300 rounded-xl outline-none cursor-pointer">
+                  <option value="auto">auto</option>
+                  <option value="1k">1k</option>
+                  <option value="2k">2k</option>
+                </select>
+              </div>
+              <div id="grok-aspect-group" class="group hidden">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 pl-0.5">Aspect Ratio</label>
+                <select id="cfg-grok-aspect-preset" class="w-full py-2.5 px-3 text-sm font-mono text-slate-800 bg-slate-50 hover:bg-slate-50/80 border border-slate-200 hover:border-slate-300 rounded-xl outline-none cursor-pointer">
+                  <option value="auto">auto / keep input</option>
+                  <option value="1:1">1:1</option>
+                  <option value="16:9">16:9</option>
+                  <option value="9:16">9:16</option>
+                  <option value="4:3">4:3</option>
+                  <option value="3:4">3:4</option>
+                  <option value="3:2">3:2</option>
+                  <option value="2:3">2:3</option>
+                  <option value="2:1">2:1</option>
+                  <option value="1:2">1:2</option>
+                  <option value="21:9">21:9</option>
+                  <option value="9:21">9:21</option>
+                  <option value="19.5:9">19.5:9</option>
+                  <option value="9:19.5">9:19.5</option>
+                  <option value="20:9">20:9</option>
+                  <option value="9:20">9:20</option>
+                  <option value="__custom__">自定义…</option>
+                </select>
+                <input type="text" id="cfg-grok-aspect" value="auto"
+                  class="mt-2 hidden w-full py-2.5 px-3 text-sm font-mono text-slate-800 bg-white border border-slate-200 rounded-xl outline-none"
+                  placeholder="例如：5:4 / 21:9 / 1024:1537">
               </div>
               <div class="group">
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 pl-0.5">Quality</label>
@@ -307,12 +342,12 @@
 
   <section class="panel" id="tab-generate">
     <div class="max-w-6xl mx-auto">
-      <div id="gen-grid" class="grid grid-cols-1 gap-6 sm:gap-8 min-h-0">
-        <div id="right-workbench-panel" class="flex flex-col space-y-6 min-h-0">
+      <div id="gen-grid" class="grid grid-cols-1 gap-6 sm:gap-8">
+        <div id="right-workbench-panel" class="flex flex-col space-y-6">
         <div id="edits-card" class="hidden">
           <input type="file" id="img-file" accept="image/*" multiple class="hidden">
         </div>
-        <div id="workbench-shell" class="flex flex-col min-h-[72vh] sm:min-h-[78vh] relative overflow-hidden min-h-0">
+        <div id="workbench-shell" class="flex flex-col min-h-[72vh] sm:min-h-[78vh] relative overflow-hidden">
           <div class="px-2 sm:px-3 py-3 flex justify-between items-center shrink-0">
             <h2 class="text-sm font-semibold text-slate-700 flex items-center">
               <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2 shadow-sm shadow-emerald-500/50"></span>
@@ -327,7 +362,7 @@
             </div>
           </div>
           <div class="flex-1 min-h-0 overflow-y-auto px-2 sm:px-3 pt-2 pb-3 scroll-smooth flex flex-col" id="chat"></div>
-          <div class="pt-1 pb-0 z-10 shrink-0 relative">
+          <div class="pt-1 pb-0 z-10 shrink-0 relative sticky bottom-0">
             <div class="relative flex flex-col gap-2 max-w-4xl mx-auto bg-slate-50/96 border border-slate-200 rounded-[2rem] p-1.5 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/10 focus-within:bg-white transition-all shadow-[0_18px_40px_-24px_rgba(15,23,42,0.28)]">
               <div id="composer-attachments" class="hidden px-3 pt-3 pb-1">
                 <div class="flex items-center justify-between mb-2">
@@ -351,45 +386,22 @@
               <textarea id="gen-prompt" rows="2"
                 class="w-full bg-transparent border-none px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-0 resize-none leading-relaxed placeholder:text-slate-400 block break-words"
                 placeholder="描述你要生成的画面 · 支持 Ctrl+V 直接粘贴参考图..."></textarea>
-              <div class="flex items-center gap-2 px-2 pb-1 pt-1">
-                <span class="min-w-0 flex-1 truncate text-[10px] sm:text-xs text-slate-400 font-medium px-1">Shift + Enter 换行 · Ctrl+V 粘贴图</span>
-                <div class="flex items-center gap-2 shrink-0">
-                  <div id="img-drop" class="hidden rounded-xl border border-dashed border-slate-200 bg-white/70 hover:border-brand-400 hover:bg-brand-50/30 transition-all cursor-pointer px-3 py-2 text-[11px] text-slate-500">
-                    点击 / 拖入 / 粘贴
-                  </div>
-                  <button id="attach-btn" type="button" title="添加参考图" class="composer-action-btn composer-attach-btn">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
-                  </button>
-                  <button id="gen-send" type="button" title="发送" class="composer-action-btn composer-send-btn">
-                    <svg class="w-4 h-4 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div id="img-editor" class="hidden max-w-4xl mx-auto mt-3 p-3 rounded-2xl bg-slate-50 ring-1 ring-slate-200">
-              <div class="flex items-center justify-between mb-2">
-                <span id="editor-title" class="text-xs font-semibold text-slate-600">编辑第 1 张</span>
+              <div class="flex flex-col gap-1 px-2 pb-1 pt-1">
                 <div class="flex items-center gap-2">
-                  <button id="mask-clear" class="text-[11px] font-medium text-slate-500 hover:text-rose-500 transition-colors px-2 py-1 rounded border border-slate-200 hover:border-rose-200 bg-white">清除涂抹</button>
-                  <button id="editor-close" type="button" class="primary-action-btn text-[11px] font-semibold px-3 py-1 rounded">完成</button>
+                  <span class="min-w-0 flex-1 truncate text-[10px] sm:text-xs text-slate-400 font-medium px-1">Shift + Enter 换行 · Ctrl+V 粘贴图</span>
+                  <div class="flex items-center gap-2 shrink-0">
+                    <div id="img-drop" class="hidden rounded-xl border border-dashed border-slate-200 bg-white/70 hover:border-brand-400 hover:bg-brand-50/30 transition-all cursor-pointer px-3 py-2 text-[11px] text-slate-500">
+                      点击 / 拖入 / 粘贴
+                    </div>
+                    <button id="attach-btn" type="button" title="添加参考图" class="composer-action-btn composer-attach-btn">
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                    </button>
+                    <button id="gen-send" type="button" title="发送" class="composer-action-btn composer-send-btn">
+                      <svg class="w-4 h-4 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div class="flex items-center justify-center bg-white rounded-xl p-2 ring-1 ring-slate-200">
-                <div class="relative inline-block">
-                  <img id="edit-img" class="max-w-full max-h-[320px] rounded-lg select-none block pointer-events-none" alt="editing" draggable="false">
-                  <canvas id="mask-canvas" class="absolute top-0 left-0 touch-none cursor-crosshair rounded-lg"></canvas>
-                </div>
-              </div>
-              <div class="mt-3 flex flex-wrap items-center gap-2">
-                <div class="flex bg-slate-100 rounded-lg p-0.5">
-                  <button id="tool-brush" data-tool="brush" class="tool-btn px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white text-slate-700 shadow-sm">笔刷</button>
-                  <button id="tool-eraser" data-tool="eraser" class="tool-btn px-2.5 py-1 rounded-md text-[11px] font-semibold text-slate-500">擦除</button>
-                </div>
-                <div class="flex items-center gap-2 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
-                  <span class="text-[11px] text-slate-500">粗细</span>
-                  <input type="range" id="brush-size" min="8" max="100" value="32" class="w-20 accent-brand-500">
-                  <span id="brush-size-label" class="text-[11px] font-mono text-slate-600 w-6 text-right">32</span>
-                </div>
+                <div id="gen-status" class="px-1 text-[11px] font-medium min-h-[1rem] text-slate-500 empty:hidden"></div>
               </div>
             </div>
           </div>
@@ -421,6 +433,23 @@
   </section>
 </main>
 
-<script src="./viewer_next.js?v=20260524-genlock3"></script>
+  <div id="img-preview-modal" class="hidden fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="img-preview-name">
+    <button id="img-preview-backdrop" type="button" class="absolute inset-0 cursor-zoom-out" aria-label="关闭预览"></button>
+    <div class="relative w-full max-w-6xl">
+      <div class="absolute -top-12 right-0 flex items-center gap-2">
+        <button id="img-preview-open" type="button" class="px-3 py-2 rounded-xl bg-white/10 text-white text-xs font-semibold ring-1 ring-white/15 hover:bg-white/20 transition-colors">新标签打开</button>
+        <button id="img-preview-close" type="button" class="px-3 py-2 rounded-xl bg-white text-slate-800 text-xs font-semibold hover:bg-slate-100 transition-colors">关闭</button>
+      </div>
+      <div class="overflow-hidden rounded-3xl bg-slate-900 shadow-2xl ring-1 ring-white/10">
+        <img id="img-preview" class="block w-full max-h-[85vh] object-contain bg-black select-none" alt="参考图预览" draggable="false">
+        <div class="flex items-center justify-between gap-3 px-4 py-3 bg-slate-950/90 text-slate-200 text-xs border-t border-white/10">
+          <div id="img-preview-name" class="min-w-0 truncate font-medium">参考图预览</div>
+          <div id="img-preview-meta" class="shrink-0 font-mono text-slate-400"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script src="./viewer_next.js?v=20260601-preview-click"></script>
 </body>
 </html>

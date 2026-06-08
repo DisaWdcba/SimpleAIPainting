@@ -25,17 +25,13 @@ body.generate-locked {
 #app-main.generate-locked-main #tab-generate,
 #app-main.generate-locked-main #tab-generate > div,
 #app-main.generate-locked-main #gen-grid,
-#app-main.generate-locked-main #right-workbench-panel,
-#app-main.generate-locked-main #workbench-shell {
+#app-main.generate-locked-main #right-workbench-panel {
   height: 100%;
   min-height: 0;
 }
 
-#app-main.generate-locked-main #tab-generate,
-#app-main.generate-locked-main #tab-generate > div,
-#app-main.generate-locked-main #gen-grid,
-#app-main.generate-locked-main #right-workbench-panel {
-  overflow: hidden;
+#app-main.generate-locked-main #workbench-shell {
+  margin-top: 0;
 }
 
 .bg-pattern {
@@ -409,11 +405,11 @@ details > summary::-webkit-details-marker {
   background: transparent;
   height: 100%;
   max-height: 100%;
+  min-height: 0 !important;
   overflow: hidden;
 }
 
 #workbench-shell > #chat {
-  flex: 1 1 auto;
   min-height: 0;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -423,7 +419,7 @@ details > summary::-webkit-details-marker {
   border-bottom: 1px solid rgba(226, 232, 240, 0.72);
 }
 
-#workbench-shell > .shrink-0.relative {
+#workbench-shell > .sticky.bottom-0 {
   background: linear-gradient(180deg, rgba(248, 250, 252, 0) 0%, rgba(248, 250, 252, 0.72) 18%, rgba(248, 250, 252, 0.98) 100%);
   backdrop-filter: blur(6px);
 }
@@ -436,7 +432,7 @@ details > summary::-webkit-details-marker {
 }
 
 #composer-attachments {
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  border-bottom: none;
 }
 
 #composer-attachments #img-grid {
