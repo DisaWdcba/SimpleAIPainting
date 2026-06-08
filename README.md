@@ -23,7 +23,7 @@
 
 **模块化版本**（推荐）：
 ```
-open "viewer v2.9.2.html"
+open "viewer_next.html"
 ```
 
 ### Electron 开发
@@ -54,10 +54,6 @@ Vibe_Paint/
 │   └── package.json        # 应用声明
 ├── build/
 │   └── remove-locales.js   # 打包后删除多余本地化文件
-├── viewer v2.9.html        # 模块化版本 (开发用)
-├── viewer.css              # 独立样式
-├── viewer.js               # 独立脚本
-├── package.json            # 根：Electron + electron-builder
 └── README.md
 ```
 
