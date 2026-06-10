@@ -1,42 +1,59 @@
 # 米醋画图
 
-双面板图像工具：Base64 解码 + OpenAI 兼容 API 生图，支持 Web 直接使用与 Electron 桌面打包。
+双面板图像工具：Base64 解码 + OpenAI 兼容 API 生图，支持 Electron 桌面应用与 NSIS 安装包发布。
 
 ## 功能
 
 - **解码**：粘贴 Base64 或 Data URL，解析为图片预览、元数据展示、下载
 - **生成**：调用 OpenAI 兼容接口（`/v1/images/generations`、`/v1/images/edits`、`/v1/chat/completions`）
 - **多 API 配置**：支持新建/保存/切换多组接口配置，localStorage 持久化
-- **模型列表获取**：一键拉取 provider 端 `/v1/models`，填充 datalist 下拉
+- **模型列表获取**：一键拉取 provider 端 `/v1/models`，填充模型选择
 - **N 并行请求**：设置 N 张数后自动拆分多次独立请求，合并结果
 - **参考图片上传**：拖入/粘贴/点击上传（最多 9 张），支持 edits 模式
-- **对话式工作台**：线程化展示用户 Prompt 与 AI 响应，版本切换、复制、重生成
-- **内联编辑**：hover 用户气泡复制提示词或一键编辑后覆盖原对话
-- **生图历史**：右侧抽屉历史记录，支持详情查看、单条删除、全部清空
-- **调试面板**：手动开启，展示连通检测与每次 API 请求的原始响应
-- **明暗主题**：跟随系统或手动切换，localStorage 记忆
-- **响应式**：移动端侧栏覆盖式抽屉，桌面端可折叠侧边栏
+- **对话式工作台**：线程化展示用户 Prompt 与 AI 响应，支持重生成与复制
+- **生图历史**：设置面板内置历史记录，支持查看、删除、清空
+- **调试面板**：展示 API 请求原始响应与错误信息，便于排障
+- **桌面托盘**：托盘右键支持打开主程序、显示历史记录、退出应用
+- **内存优化**：关闭窗口时释放主渲染窗口，仅保留托盘常驻进程
+- **响应式**：兼容桌面窗口尺寸变化
 
 ## 快速开始
 
-### Web（浏览器直接打开）
+### 安装依赖
 
-**模块化版本**（推荐）：
-```
-open "viewer_next.html"
+```bash
+npm install
 ```
 
 ### Electron 开发
 
 ```bash
+npm run dev
+```
+
+### Electron 直接启动
+
+```bash
 npm start
 ```
 
-### Electron 构建
+### 构建桌面程序
 
 ```bash
-# 国内网络需设置 Electron 镜像
-export ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+npm run build
+```
+
+### 打包免安装版
+
+```bash
+npm run pack
+```
+
+输出目录：`release/win-unpacked/`
+
+### 打包 NSIS 安装包
+
+```bash
 npm run dist
 ```
 
@@ -44,25 +61,41 @@ npm run dist
 
 ## 项目结构
 
-```
-Vibe_Paint/
-├── app/                    # Electron 应用源码 (入口)
-│   ├── index.html          # 模块化 HTML (加载 viewer.css + viewer.js)
-│   ├── viewer.css          # 样式
-│   ├── viewer.js           # 逻辑
-│   ├── main.js             # Electron 主进程
-│   └── package.json        # 应用声明
+```text
+MicuPaint_Next/
 ├── build/
-│   └── remove-locales.js   # 打包后删除多余本地化文件
-└── README.md
+│   └── icon.ico                # 主程序 / 安装包图标
+├── dist/                       # 构建产物
+├── release/                    # 打包产物
+├── src/
+│   ├── main/
+│   │   └── main.ts             # Electron 主进程（窗口、托盘、IPC）
+│   ├── preload/
+│   │   └── preload.ts          # 安全桥接
+│   └── renderer/
+│       ├── index.html          # 渲染入口 HTML
+│       ├── app.ts              # 前端逻辑
+│       ├── styles.css          # 样式
+│       └── global.d.ts         # 渲染端类型声明
+├── package.json                # 项目脚本与 electron-builder 配置
+├── package-lock.json
+├── vite.config.ts              # 前端构建配置
+├── tailwind.config.js
+├── postcss.config.js
+├── tsconfig.base.json
+├── tsconfig.main.json
+├── tsconfig.preload.json
+├── tsconfig.renderer.json
+└── micu-image-20260607.html    # 原始单文件网页版本
 ```
 
 ## 技术栈
 
-- 纯 HTML/CSS/JS，无框架，无构建
-- Tailwind CSS CDN（首次加载需网络）
-- localStorage 持久化配置与历史
+- TypeScript
+- Vite
+- Tailwind CSS + PostCSS
 - Electron + electron-builder（NSIS 安装包）
+- localStorage + IndexedDB
 
 ## 接口兼容
 
