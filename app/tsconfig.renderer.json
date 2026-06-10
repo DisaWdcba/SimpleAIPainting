@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "lib": ["DOM", "DOM.Iterable", "ES2020"],
+    "noEmit": true,
+    "allowJs": false
+  },
+  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.d.ts"]
+}

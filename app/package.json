@@ -1,0 +1,69 @@
+{
+  "name": "micu-paint-next",
+  "version": "0.1.0",
+  "description": "Micu Image Windows desktop app",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev": "npm run build:renderer && concurrently -k \"npm:watch:*\" \"npm:electron:serve\"",
+    "build": "npm run build:main && npm run build:preload && npm run build:renderer",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:preload": "tsc -p tsconfig.preload.json",
+    "build:renderer": "vite build",
+    "watch:main": "tsc -w -p tsconfig.main.json",
+    "watch:preload": "tsc -w -p tsconfig.preload.json",
+    "watch:renderer": "vite build --watch",
+    "electron:serve": "wait-on dist/renderer/index.html dist/main/main.js dist/preload/preload.js && electron .",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc --noEmit -p tsconfig.renderer.json && npm run build:main && npm run build:preload",
+    "pack": "npm run build && cross-env ELECTRON_BUILDER_BINARIES_MIRROR=https://github.com/electron-userland/electron-builder-binaries/releases/download/ electron-builder --win --dir",
+    "dist": "npm run build && cross-env ELECTRON_BUILDER_BINARIES_MIRROR=https://github.com/electron-userland/electron-builder-binaries/releases/download/ electron-builder --win nsis",
+    "lint": "tsc --noEmit -p tsconfig.renderer.json"
+  },
+  "build": {
+    "appId": "com.micu.image",
+    "productName": "\u7c73\u918b\u753b\u56fe",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json",
+      "build/icon.ico"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
+    "electronDist": "node_modules/electron/dist",
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^8.2.2",
+    "electron": "^31.1.0",
+    "electron-builder": "^24.13.3",
+    "postcss": "^8.4.39",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.3",
+    "wait-on": "^7.2.0",
+    "cross-env": "^7.0.3"
+  }
+}

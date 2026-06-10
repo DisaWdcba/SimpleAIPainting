@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "outDir": "dist/preload",
+    "rootDir": "src/preload",
+    "types": ["node"]
+  },
+  "include": ["src/preload/**/*.ts"]
+}
