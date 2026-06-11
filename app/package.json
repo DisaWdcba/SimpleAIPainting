@@ -21,8 +21,9 @@
   },
   "build": {
     "appId": "com.micu.image",
-    "productName": "\u7c73\u918b\u753b\u56fe",
+    "productName": "\u62b9\u8336\u753b\u56fe",
     "directories": {
+      "app": ".",
       "output": "release"
     },
     "files": [
